@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>午餐錢小幫手</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:          #FDFCF8;
+      --fg:          #2C2C24;
+      --primary:     #5D7052;
+      --primary-fg:  #F3F4F1;
+      --secondary:   #C18C5D;
+      --accent:      #E6DCCD;
+      --accent-fg:   #4A4A40;
+      --muted:       #F0EBE5;
+      --muted-fg:    #78786C;
+      --border:      #DED8CF;
+      --destructive: #A85448;
+      --card:        #FEFEFA;
+      --sh-soft:  0 4px 20px -2px rgba(93,112,82,.15);
+      --sh-float: 0 10px 40px -10px rgba(193,140,93,.22);
+      --sh-deep:  0 20px 40px -10px rgba(93,112,82,.18);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: 'Nunito', sans-serif;
+      font-size: 16px;
+      line-height: 1.55;
+      min-height: 100vh;
+    }
+
+    /* --- grain texture --- */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 1;
+      opacity: .035; mix-blend-mode: multiply;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.8'/></svg>");
+    }
+
+    /* --- background blobs --- */
+    .bg-blobs { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+    .blob { position: absolute; filter: blur(80px); opacity: .28; animation: bfloat 9s ease-in-out infinite; }
+    .blob-1 {
+      width: 520px; height: 520px; background: #5D7052;
+      border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+      top: -170px; left: -150px;
+    }
+    .blob-2 {
+      width: 440px; height: 440px; background: #C18C5D;
+      border-radius: 40% 60% 70% 30% / 50% 60% 40% 50%;
+      bottom: -150px; right: -130px; opacity: .18;
+      animation-delay: -3.5s;
+    }
+    .blob-3 {
+      width: 300px; height: 300px; background: #E6DCCD;
+      border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+      top: 44%; right: -60px; opacity: .38;
+      animation-delay: -6s;
+    }
+    @keyframes bfloat {
+      0%,100% { transform: translateY(0) scale(1); }
+      50%      { transform: translateY(-22px) scale(1.025); }
+    }
+
+    h1, h2, h3, h4 {
+      font-family: 'Fraunces', serif;
+      letter-spacing: -.015em;
+    }
+
+    /* ======================================
+       SCREEN CONTAINER
+    ====================================== */
+    .screen { position: relative; z-index: 2; }
+
+    /* ======================================
+       SCREEN 1 — LOGIN
+    ====================================== */
+    #screen-1 {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 32px 20px;
+    }
+
+    .login-wrap { width: 100%; max-width: 400px; }
+
+    .login-card {
+      background: var(--card);
+      border: 1px solid rgba(222,216,207,.6);
+      border-radius: 48px 32px 48px 32px;
+      padding: 52px 40px 44px;
+      box-shadow: var(--sh-float);
+      text-align: center;
+      animation: cardin .5s ease both;
+    }
+
+    @keyframes cardin {
+      from { opacity: 0; transform: translateY(28px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .login-logo-wrap { display: flex; justify-content: center; margin-bottom: 26px; }
+    .login-logo {
+      width: 90px; height: 90px;
+      background: var(--primary);
+      border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 42px;
+      box-shadow: var(--sh-soft);
+      animation: logofloat 4s ease-in-out infinite;
+    }
+    @keyframes logofloat {
+      0%,100% { transform: translateY(0) rotate(-2deg); }
+      50%      { transform: translateY(-9px) rotate(2deg); }
+    }
+
+    .login-title { font-size: 30px; font-weight: 700; margin-bottom: 8px; }
+    .login-sub   { color: var(--muted-fg); font-size: 14px; margin-bottom: 30px; }
+    .login-card .field { text-align: left; }
+
+    /* ======================================
+       TOP BAR (screens 2 & 3)
+    ====================================== */
+    .top-bar {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 13px 22px;
+      background: rgba(255,255,255,.72);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(222,216,207,.5);
+      border-radius: 999px;
+      box-shadow: var(--sh-soft);
+      margin-bottom: 26px;
+    }
+    .user-info { display: flex; align-items: center; gap: 11px; }
+    .avatar {
+      width: 40px; height: 40px;
+      background: var(--primary); color: var(--primary-fg);
+      border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Fraunces', serif; font-weight: 700; font-size: 17px;
+    }
+    .user-name  { font-weight: 700; font-size: 15px; line-height: 1.2; }
+    .user-label { font-size: 12px; color: var(--muted-fg); }
+
+    /* ======================================
+       SCREEN 2 & 3 — LAYOUT
+    ====================================== */
+    #screen-2, #screen-3 {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 24px 20px 88px;
+    }
+
+    /* ======================================
+       CARDS
+    ====================================== */
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(222,216,207,.55);
+      padding: 26px 28px;
+      box-shadow: var(--sh-soft);
+      margin-bottom: 18px;
+      animation: cardin .4s ease both;
+    }
+    .card-a { border-radius: 32px 32px 32px 52px; }
+    .card-b { border-radius: 52px 32px 32px 32px; }
+    .card-r { border-radius: 36px; }
+    .card:nth-child(2) { animation-delay: .07s; }
+    .card:nth-child(3) { animation-delay: .14s; }
+
+    .card-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 20px;
+    }
+    .card-icon {
+      width: 38px; height: 38px;
+      background: var(--accent); color: var(--accent-fg);
+      border-radius: 55% 45% 60% 40% / 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .card-header h2 { font-size: 19px; font-weight: 700; }
+
+    /* ======================================
+       FORM FIELDS
+    ====================================== */
+    .field { margin-bottom: 14px; }
+    .field-row { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; }
+
+    label {
+      display: block;
+      font-weight: 700; font-size: 11px;
+      color: var(--muted-fg);
+      margin-bottom: 6px; margin-left: 16px;
+      letter-spacing: .06em; text-transform: uppercase;
+    }
+
+    input[type=text],
+    input[type=number],
+    input[type=date],
+    input[type=password],
+    select {
+      width: 100%; height: 48px;
+      padding: 0 18px;
+      background: rgba(255,255,255,.65);
+      border: 1.5px solid var(--border);
+      border-radius: 999px;
+      font-family: 'Nunito', sans-serif; font-size: 15px;
+      color: var(--fg);
+      transition: border-color .2s, box-shadow .2s, background .2s;
+      appearance: none; -webkit-appearance: none;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 4px rgba(93,112,82,.13);
+      background: #fff;
+    }
+    input::placeholder { color: #b8b4aa; }
+
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235D7052' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      background-color: rgba(255,255,255,.65);
+      padding-right: 42px;
+    }
+    select:focus { background-color: #fff; }
+
+    /* ======================================
+       PERSON ROWS (Screen 2 Block B)
+    ====================================== */
+    .person-row {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr auto;
+      gap: 8px; align-items: center;
+      padding: 9px;
+      background: rgba(253,252,248,.92);
+      border: 1.5px solid rgba(222,216,207,.65);
+      border-radius: 999px;
+      margin-bottom: 6px;
+      transition: border-color .2s, background .2s;
+    }
+    .person-row:hover { border-color: rgba(93,112,82,.32); background: #fff; }
+    .person-row select,
+    .person-row input[type=number] {
+      height: 38px; font-size: 14px;
+      padding: 0 13px; border-color: transparent;
+      background: white; box-shadow: none;
+    }
+    .person-row select { padding-right: 34px; background-position: right 11px center; }
+    .person-row select:focus,
+    .person-row input[type=number]:focus { border-color: var(--primary); }
+
+    .del-btn {
+      width: 36px; height: 36px;
+      background: rgba(168,84,72,.1);
+      border: none; color: var(--destructive);
+      border-radius: 50%; cursor: pointer; font-size: 14px;
+      flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+      transition: background .2s, transform .2s;
+    }
+    .del-btn:hover { background: var(--destructive); color: #fff; transform: rotate(90deg); }
+
+    .preview-chip {
+      font-size: 13px; color: var(--muted-fg);
+      padding: 2px 0 10px 20px;
+      display: block; min-height: 24px;
+    }
+    .preview-chip strong {
+      font-family: 'Fraunces', serif;
+      color: var(--primary); font-size: 15px; font-weight: 700;
+    }
+
+    /* ======================================
+       SUMMARY CARD
+    ====================================== */
+    .summary-card {
+      background: linear-gradient(135deg, rgba(93,112,82,.07) 0%, rgba(193,140,93,.07) 100%);
+      border: 1.5px solid rgba(93,112,82,.2);
+      border-radius: 32px; padding: 22px 26px;
+      margin-bottom: 18px;
+      animation: cardin .4s .22s ease both;
+    }
+    .summary-card h3 {
+      font-size: 16px; font-weight: 700;
+      margin-bottom: 14px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .sum-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 9px 0;
+      border-bottom: 1px dashed rgba(222,216,207,.7);
+    }
+    .sum-row:last-child { border-bottom: none; }
+    .sum-label { font-size: 14px; color: var(--muted-fg); }
+    .sum-val { font-family: 'Fraunces', serif; font-weight: 700; font-size: 19px; }
+    .sum-val.hi { color: var(--primary); font-size: 24px; }
+
+    /* ======================================
+       BUTTONS
+    ====================================== */
+    .submit-btn {
+      display: block; width: 100%; height: 58px;
+      background: var(--primary); color: var(--primary-fg);
+      border: none; border-radius: 999px;
+      font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 16px;
+      letter-spacing: .025em; cursor: pointer;
+      box-shadow: var(--sh-soft);
+      transition: transform .3s, box-shadow .3s;
+      animation: cardin .4s .3s ease both;
+    }
+    .submit-btn:hover:not(:disabled) { transform: scale(1.02) translateY(-2px); box-shadow: var(--sh-deep); }
+    .submit-btn:active:not(:disabled) { transform: scale(.98); }
+    .submit-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    .add-btn {
+      width: 100%; background: transparent;
+      border: 2px dashed var(--secondary); color: var(--secondary);
+      padding: 12px; border-radius: 999px;
+      font-family: 'Nunito', sans-serif; font-weight: 700; font-size: 14px;
+      cursor: pointer; transition: all .25s; margin-top: 8px;
+    }
+    .add-btn:hover { background: rgba(193,140,93,.08); border-style: solid; }
+
+    .logout-btn {
+      background: transparent;
+      border: 2px solid var(--secondary); color: var(--secondary);
+      padding: 8px 18px; border-radius: 999px;
+      font-family: 'Nunito', sans-serif; font-weight: 700; font-size: 13px;
+      cursor: pointer; transition: all .25s;
+    }
+    .logout-btn:hover { background: var(--secondary); color: #fff; }
+
+    /* ======================================
+       ERROR MESSAGE
+    ====================================== */
+    .err-msg {
+      background: rgba(168,84,72,.09);
+      border: 1.5px solid rgba(168,84,72,.28);
+      border-radius: 20px; padding: 11px 16px;
+      color: var(--destructive);
+      font-size: 14px; font-weight: 600;
+      margin-bottom: 14px; text-align: center;
+    }
+
+    /* ======================================
+       RESULTS (Screen 3)
+    ====================================== */
+    .result-item {
+      padding: 16px 18px;
+      background: rgba(93,112,82,.05);
+      border: 1px solid rgba(93,112,82,.13);
+      border-radius: 22px; margin-bottom: 10px;
+    }
+    .result-item:last-child { margin-bottom: 0; }
+    .result-name {
+      font-family: 'Fraunces', serif; font-weight: 700;
+      font-size: 17px; margin-bottom: 7px;
+    }
+    .result-row {
+      display: flex; flex-wrap: wrap; gap: 14px;
+      font-size: 14px; color: var(--muted-fg);
+    }
+    .result-row span strong { color: var(--fg); }
+    .result-bal strong { color: var(--primary) !important; }
+
+    /* ======================================
+       LOADING OVERLAY
+    ====================================== */
+    #loading-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(253,252,248,.88);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      display: none; align-items: center; justify-content: center;
+    }
+    .loading-card {
+      background: var(--card);
+      border: 1px solid rgba(222,216,207,.6);
+      border-radius: 36px; padding: 44px 56px;
+      text-align: center; box-shadow: var(--sh-float);
+    }
+    .spinner {
+      width: 52px; height: 52px;
+      border: 4px solid var(--muted); border-top-color: var(--primary);
+      border-radius: 50%; margin: 0 auto 18px;
+      animation: spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-text { font-weight: 600; color: var(--muted-fg); font-size: 15px; }
+  </style>
+</head>
+<body>
+
+  <!-- background blobs -->
+  <div class="bg-blobs" aria-hidden="true">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+
+  <!-- ==================== SCREEN 1 : LOGIN ==================== -->
+  <div id="screen-1" class="screen">
+    <div class="login-wrap">
+
+      <!-- 登入表單 -->
+      <div id="phase-b">
+        <div class="login-card">
+          <div class="login-logo-wrap"><div class="login-logo">🌿</div></div>
+          <h1 class="login-title">午餐錢小幫手</h1>
+          <p class="login-sub">請登入以繼續</p>
+          <div id="err-login" class="err-msg" style="display:none"></div>
+          <div class="field">
+            <label>姓名</label>
+            <select id="login-name" oninput="hideE('err-login')">
+              <option value="">請選擇姓名</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:24px">
+            <label>密碼</label>
+            <input type="password" id="login-pwd" placeholder="請輸入密碼"
+              oninput="hideE('err-login')"
+              onkeydown="if(event.key==='Enter') handleLogin()">
+          </div>
+          <button class="submit-btn" onclick="handleLogin()">登入</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== SCREEN 2 : PAYMENT INPUT ==================== -->
+  <div id="screen-2" class="screen" style="display:none">
+
+    <div class="top-bar">
+      <div class="user-info">
+        <div class="avatar" id="s2-av"></div>
+        <div>
+          <div class="user-name" id="s2-nm"></div>
+          <div class="user-label">打帳者</div>
+        </div>
+      </div>
+      <button class="logout-btn" onclick="doLogout()">登出</button>
+    </div>
+
+    <!-- Block A：訂單資訊 -->
+    <div class="card card-a">
+      <div class="card-header">
+        <div class="card-icon">📋</div>
+        <h2>訂單資訊</h2>
+      </div>
+      <div class="field">
+        <label>訂單標題</label>
+        <input type="text" id="order-title" placeholder="例：25/11/27 午餐">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>打單日期</label>
+          <input type="date" id="order-date">
+        </div>
+        <div class="field">
+          <label>外送費（元）</label>
+          <input type="number" id="delivery" value="0" min="0" oninput="refreshAll()">
+        </div>
+      </div>
+      <div class="field">
+        <label>優惠折扣（元）</label>
+        <input type="number" id="discount" value="0" min="0" oninput="refreshAll()">
+      </div>
+    </div>
+
+    <!-- Block B：扣款名單 -->
+    <div class="card card-b">
+      <div class="card-header">
+        <div class="card-icon">👥</div>
+        <h2>扣款名單</h2>
+      </div>
+      <div id="person-list"></div>
+      <button class="add-btn" onclick="addRow()">＋ 新增一人</button>
+    </div>
+
+    <!-- Block C：總覽 -->
+    <div class="summary-card">
+      <h3><span>📊</span> 本單總覽</h3>
+      <div class="sum-row">
+        <span class="sum-label">不重複人數</span>
+        <span class="sum-val" id="sum-count">0 人</span>
+      </div>
+      <div class="sum-row">
+        <span class="sum-label">訂單金額合計</span>
+        <span class="sum-val" id="sum-order">0 元</span>
+      </div>
+      <div class="sum-row">
+        <span class="sum-label">含外送費 / 折扣</span>
+        <span class="sum-val hi" id="sum-final">0 元</span>
+      </div>
+    </div>
+
+    <button class="submit-btn" id="btn-submit" onclick="handleSubmit()">送出扣款</button>
+  </div>
+
+  <!-- ==================== SCREEN 3 : RESULTS ==================== -->
+  <div id="screen-3" class="screen" style="display:none">
+
+    <div class="top-bar">
+      <div class="user-info">
+        <div class="avatar" id="s3-av"></div>
+        <div>
+          <div class="user-name" id="s3-nm"></div>
+          <div class="user-label">打帳者</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-r">
+      <div class="card-header">
+        <div class="card-icon">✅</div>
+        <h2>扣款完成</h2>
+      </div>
+      <div id="results-list"></div>
+    </div>
+
+    <button class="submit-btn" onclick="resetScreen2()">再扣一筆</button>
+  </div>
+
+  <!-- ==================== LOADING OVERLAY ==================== -->
+  <div id="loading-overlay">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <p id="loading-text">載入中...</p>
+    </div>
+  </div>
+
+  <script>
+    /* ============================================================
+       CONFIG  ← 請確認兩個 TAB 名稱與 Google Sheet 分頁名稱一致
+    ============================================================ */
+    const CFG = {
+      SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxHHqoEIBDI7YvlJk5kqvKUeE49j2fODvvYd8xZlqn1szll2mw546bJ4UBgU51nv4-0pg/exec',
+      MAIN_TAB:   '主名單表',
+      FLOW_TAB:   '金流紀錄表',
+    };
+
+    /* 主名單欄位索引 (A=0) */
+    const C = { NAME:0, BALANCE:2, ROLE:5, WALLET:6, OVERDUE:7, PASSWORD:10 };
+
+    /* ============================================================
+       STATE
+    ============================================================ */
+    let listData = [];    // raw rows from sheet
+    let rowMap   = {};    // name → { rowNum (1-based in sheet), data }
+    let allNames = [];
+    let me       = null;  // { name, rowNum, data }
+    let rows     = [];    // payment rows in screen 2
+    let results  = [];    // result items for screen 3
+
+    /* ============================================================
+       APPS SCRIPT API helper
+    ============================================================ */
+    async function callScript(action, payload = null) {
+      if (!CFG.SCRIPT_URL) throw new Error('請先設定 CFG.SCRIPT_URL');
+      let url = `${CFG.SCRIPT_URL}?action=${action}`;
+      if (payload !== null) url += `&data=${encodeURIComponent(JSON.stringify(payload))}`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`網路錯誤 (${r.status})`);
+      const json = await r.json();
+      if (json.error) throw new Error(json.error);
+      return json;
+    }
+
+    /* ============================================================
+       DATA LOAD
+    ============================================================ */
+    async function loadList() {
+      const d = await callScript('getList');
+      listData = d.values || [];
+      rowMap = {}; allNames = [];
+      listData.forEach((row, i) => {
+        const n = row[C.NAME];
+        if (n) { rowMap[n] = { rowNum: i + 2, data: row }; allNames.push(n); }
+      });
+    }
+
+    /* ============================================================
+       SCREEN 1 — LOGIN
+    ============================================================ */
+    async function loadAndLogin() {
+      try {
+        loading('載入名單...');
+        await loadList();
+        unload();
+        const sel = g('login-name');
+        sel.innerHTML = '<option value="">請選擇姓名</option>';
+        listData.forEach(r => {
+          if (r[C.NAME] && r[C.PASSWORD]) {
+            const o = document.createElement('option');
+            o.value = o.textContent = r[C.NAME];
+            sel.appendChild(o);
+          }
+        });
+        g('login-name').focus();
+      } catch(e) {
+        unload();
+        showE('err-login', '載入失敗：' + e.message);
+      }
+    }
+
+    function handleLogin() {
+      const name = g('login-name').value;
+      const pwd  = g('login-pwd').value;
+      hideE('err-login');
+      if (!name) { showE('err-login', '請選擇姓名'); return; }
+      if (!pwd)  { showE('err-login', '請輸入密碼'); return; }
+      const entry = rowMap[name];
+      if (!entry || pwd !== (entry.data[C.PASSWORD] || '')) {
+        showE('err-login', '姓名或密碼錯誤'); return;
+      }
+      me = { name, rowNum: entry.rowNum, data: entry.data };
+      goScreen(2);
+      setupS2();
+    }
+
+    /* ============================================================
+       SCREEN 2 — PAYMENT INPUT
+    ============================================================ */
+    function setupS2() {
+      g('s2-av').textContent = me.name[0];
+      g('s2-nm').textContent = me.name;
+      g('order-title').value = '';
+      g('order-date').value  = today();
+      g('delivery').value    = '0';
+      g('discount').value    = '0';
+      rows = [{ name: '', amt: '' }];
+      renderRows();
+    }
+
+    function renderRows() {
+      const container = g('person-list');
+      container.innerHTML = '';
+      rows.forEach((row, i) => {
+        /* name select */
+        const sel = mk('select');
+        sel.innerHTML = '<option value="">請選擇姓名</option>';
+        allNames.forEach(n => {
+          const o = document.createElement('option');
+          o.value = o.textContent = n;
+          if (n === row.name) o.selected = true;
+          sel.appendChild(o);
+        });
+        sel.oninput = () => { rows[i].name = sel.value; refreshAll(); };
+
+        /* amount input */
+        const inp = mk('input');
+        inp.type = 'number'; inp.min = '0'; inp.placeholder = '金額';
+        inp.value = row.amt;
+        inp.oninput = () => { rows[i].amt = inp.value; refreshAll(); };
+
+        /* delete button */
+        const del = mk('button', 'del-btn');
+        del.innerHTML = '✕';
+        del.title = '移除此列';
+        del.onclick = () => {
+          if (rows.length === 1) return;
+          rows.splice(i, 1); renderRows(); updateSummary();
+        };
+
+        const pill = mk('div', 'person-row');
+        pill.append(sel, inp, del);
+
+        /* preview chip */
+        const chip = mk('span', 'preview-chip');
+        chip.id = `chip-${i}`;
+
+        const wrap = mk('div');
+        wrap.append(pill, chip);
+        container.appendChild(wrap);
+      });
+      refreshAll();
+    }
+
+    function refreshAll() {
+      rows.forEach((_, i) => updateChip(i));
+      updateSummary();
+    }
+
+    function uniqueCount() {
+      return new Set(rows.map(r => r.name).filter(Boolean)).size || 1;
+    }
+
+    function calcDeduction(i) {
+      const amt  = parseFloat(rows[i].amt) || 0;
+      const del  = parseFloat(g('delivery').value) || 0;
+      const dis  = parseFloat(g('discount').value) || 0;
+      const uc   = uniqueCount();
+      return Math.round((amt - dis / uc + del / uc) * 100) / 100;
+    }
+
+    function updateChip(i) {
+      const chip = g(`chip-${i}`);
+      if (!chip) return;
+      if (!rows[i].name || rows[i].amt === '') { chip.innerHTML = ''; return; }
+      chip.innerHTML = `↳ 實際扣款 <strong>${calcDeduction(i)} 元</strong>`;
+    }
+
+    function updateSummary() {
+      const uc    = uniqueCount();
+      const total = rows.reduce((s, r) => s + (parseFloat(r.amt) || 0), 0);
+      const del   = parseFloat(g('delivery').value) || 0;
+      const dis   = parseFloat(g('discount').value) || 0;
+      g('sum-count').textContent = `${uc} 人`;
+      g('sum-order').textContent = `${total} 元`;
+      g('sum-final').textContent = `${total + del - dis} 元`;
+    }
+
+    function addRow() { rows.push({ name: '', amt: '' }); renderRows(); }
+
+    /* ============================================================
+       SUBMIT
+    ============================================================ */
+    async function handleSubmit() {
+      const title = g('order-title').value.trim();
+      if (!title)                        { alert('請填寫訂單標題'); return; }
+      if (rows.some(r => !r.name))       { alert('有列尚未選擇姓名'); return; }
+
+      const btn = g('btn-submit');
+      btn.disabled = true;
+      loading('讀取最新資料...');
+      try {
+        await loadList(); // always reload for fresh balances
+
+        const delivery = parseFloat(g('delivery').value) || 0;
+        const discount = parseFloat(g('discount').value) || 0;
+        const uc       = uniqueCount();
+        const ts       = new Date().toLocaleString('zh-TW');
+        const op       = me.name;
+
+        /* find 打帳者（K 欄有值者即為打帳者） */
+        const cashierEntry = Object.values(rowMap).find(e =>
+          e.data[C.PASSWORD] && e.data[C.PASSWORD].trim() !== '');
+        if (!cashierEntry)
+          throw new Error('找不到打帳者（請確認主名單 K 欄有填入打帳者名稱）');
+        const cashier = cashierEntry.data[C.NAME];
+
+        /* in-memory running balances */
+        const bal = {};
+        Object.entries(rowMap).forEach(([n, e]) =>
+          bal[n] = parseFloat(e.data[C.BALANCE]) || 0);
+
+        const flowRows = [];
+        results = [];
+
+        loading('計算金額...');
+        for (const row of rows) {
+          const { name } = row;
+          const entry = rowMap[name];
+          if (!entry) throw new Error(`找不到成員：${name}`);
+
+          const amt       = parseFloat(row.amt) || 0;
+          const delShare  = Math.round(delivery / uc * 100) / 100;
+          const disShare  = Math.round(discount / uc * 100) / 100;
+          const deduction = Math.round((amt - disShare + delShare) * 100) / 100;
+          const isOverdue = (entry.data[C.OVERDUE] || '').trim() === '低額逾期';
+          const svcFee    = isOverdue ? 12 : 2;
+          const wallet    = entry.data[C.WALLET] || '';
+
+          /* 1. 訂餐扣款 */
+          const b1 = bal[name];
+          bal[name] = Math.round((b1 - deduction) * 100) / 100;
+          flowRows.push([title, name, '扣款', amt, delivery, -deduction,
+                         b1, bal[name], op, '', ts, wallet]);
+
+          /* 2. 服務費扣除 */
+          const b2 = bal[name];
+          bal[name] = Math.round((b2 - svcFee) * 100) / 100;
+          flowRows.push([title, name, '服務費', 0, 0, -svcFee,
+                         b2, bal[name], op, '', ts, wallet]);
+
+          /* 3. 服務費儲入打帳者 */
+          const b3 = bal[cashier];
+          bal[cashier] = Math.round((b3 + svcFee) * 100) / 100;
+          flowRows.push([title, cashier, '服務費收入', 0, 0, svcFee,
+                         b3, bal[cashier], op, '', ts, '']);
+
+          results.push({ name, deduction, svcFee, newBal: bal[name] });
+        }
+
+        /* write to sheet via Apps Script */
+        loading('寫入資料...');
+        const balanceUpdates = Object.entries(bal)
+          .filter(([n]) => rowMap[n])
+          .map(([n, v]) => ({ row: rowMap[n].rowNum, value: v }));
+        await callScript('submit', { flowRows, balanceUpdates });
+
+        unload();
+        showResults();
+      } catch(e) {
+        unload();
+        alert('送出失敗：' + e.message);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    /* ============================================================
+       SCREEN 3 — RESULTS
+    ============================================================ */
+    function showResults() {
+      g('s3-av').textContent = me.name[0];
+      g('s3-nm').textContent = me.name;
+      const list = g('results-list');
+      list.innerHTML = '';
+      results.forEach(r => {
+        const item = mk('div', 'result-item');
+        item.innerHTML = `
+          <div class="result-name">${r.name}</div>
+          <div class="result-row">
+            <span>扣款 <strong>－${r.deduction} 元</strong></span>
+            <span>服務費 <strong>－${r.svcFee} 元</strong></span>
+            <span class="result-bal">結餘 <strong>${r.newBal} 元</strong></span>
+          </div>`;
+        list.appendChild(item);
+      });
+      goScreen(3);
+    }
+
+    function resetScreen2() { goScreen(2); setupS2(); }
+
+    /* ============================================================
+       NAVIGATION & HELPERS
+    ============================================================ */
+    function goScreen(n) {
+      [1, 2, 3].forEach(i => {
+        g(`screen-${i}`).style.display =
+          i !== n ? 'none' : (i === 1 ? 'flex' : 'block');
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function doLogout() {
+      me = null;
+      g('login-name').value = '';
+      g('login-pwd').value  = '';
+      hideE('err-login');
+      goScreen(1);
+    }
+
+    /* DOM utils */
+    function g(id)         { return document.getElementById(id); }
+    function mk(tag, cls)  { const e = document.createElement(tag); if (cls) e.className = cls; return e; }
+    function showE(id, msg) { const e = g(id); e.textContent = msg; e.style.display = 'block'; }
+    function hideE(id)      { g(id).style.display = 'none'; }
+    function loading(msg)   { g('loading-text').textContent = msg; g('loading-overlay').style.display = 'flex'; }
+    function unload()       { g('loading-overlay').style.display = 'none'; }
+    function today()        { return new Date().toISOString().split('T')[0]; }
+
+    /* 頁面載入時自動讀取名單 */
+    window.addEventListener('DOMContentLoaded', loadAndLogin);
+  </script>
+</body>
+</html>

@@ -374,6 +374,228 @@
     .result-bal strong { color: var(--primary) !important; }
 
     /* ======================================
+       SCREEN CAL — CALENDAR
+    ====================================== */
+    #screen-cal {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 24px 16px 96px;
+    }
+
+    .cal-card {
+      background: var(--card);
+      border: 1px solid rgba(222,216,207,.55);
+      border-radius: 36px;
+      padding: 20px 18px 22px;
+      box-shadow: var(--sh-soft);
+      animation: cardin .4s ease both;
+    }
+
+    .cal-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px; padding: 0 4px;
+    }
+    .cal-nav-left { display: flex; align-items: center; gap: 12px; }
+    .cal-month-label {
+      font-family: 'Fraunces', serif; font-weight: 700;
+      font-size: 22px; letter-spacing: -.01em;
+    }
+    .cal-arrow {
+      width: 38px; height: 38px; flex-shrink: 0;
+      background: var(--muted); color: var(--accent-fg);
+      border: none; border-radius: 50%;
+      font-size: 18px; cursor: pointer; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s, transform .2s;
+    }
+    .cal-arrow:hover { background: var(--accent); transform: scale(1.06); }
+    .cal-arrow:active { transform: scale(.92); }
+
+    .cal-tools { display: flex; align-items: center; gap: 8px; }
+    .cal-today-btn {
+      background: transparent; border: 1.5px solid var(--border);
+      color: var(--muted-fg); border-radius: 999px;
+      padding: 7px 14px; font-family: 'Nunito', sans-serif;
+      font-weight: 700; font-size: 12px; cursor: pointer;
+      transition: all .2s;
+    }
+    .cal-today-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .cal-toggle {
+      width: 38px; height: 38px; flex-shrink: 0;
+      background: var(--muted); border: none; color: var(--accent-fg);
+      border-radius: 50%; font-size: 17px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s;
+    }
+    .cal-toggle:hover { background: var(--accent); }
+    .cal-toggle.active { background: var(--primary); color: var(--primary-fg); }
+
+    .cal-weekdays {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      margin-bottom: 6px;
+    }
+    .cal-weekday {
+      text-align: center; font-size: 11px; font-weight: 700;
+      color: var(--muted-fg); letter-spacing: .05em;
+      padding: 4px 0;
+    }
+    .cal-weekday.wend { color: var(--secondary); }
+
+    .cal-grid {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      gap: 3px;
+    }
+    .cal-cell {
+      min-height: 76px;
+      border-radius: 14px;
+      padding: 4px 3px 3px;
+      background: rgba(240,235,229,.35);
+      border: 1px solid transparent;
+      display: flex; flex-direction: column; gap: 3px;
+      overflow: hidden;
+    }
+    .cal-cell-empty { background: transparent; }
+    .cal-cell.has-orders { background: rgba(253,252,248,.9); border-color: rgba(222,216,207,.6); }
+    .cal-day-num {
+      font-family: 'Fraunces', serif; font-weight: 600;
+      font-size: 13px; color: var(--fg);
+      width: 24px; height: 24px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%; line-height: 1;
+    }
+    .cal-cell.is-today .cal-day-num { background: var(--primary); color: var(--primary-fg); }
+
+    .cal-events { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .cal-event {
+      display: block; width: 100%; text-align: left;
+      background: var(--primary); color: var(--primary-fg);
+      border: none; border-radius: 6px;
+      font-family: 'Nunito', sans-serif; font-weight: 600; font-size: 11px;
+      line-height: 1.3; padding: 2px 6px; cursor: pointer;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      transition: filter .15s, transform .15s;
+    }
+    .cal-event:nth-child(2n) { background: var(--secondary); }
+    .cal-event:hover { filter: brightness(1.08); transform: translateX(1px); }
+    .cal-dot { display: none; }
+
+    /* 隱藏標題模式：只留色條，不顯示文字 */
+    #screen-cal.hide-titles .cal-event {
+      color: transparent; font-size: 0; padding: 0; height: 8px; border-radius: 999px;
+    }
+
+    .cal-empty-hint {
+      text-align: center; color: var(--muted-fg);
+      font-size: 13px; padding: 18px 0 2px;
+    }
+
+    /* ======================================
+       FAB（右下角新增）
+    ====================================== */
+    .fab {
+      position: fixed; right: 22px; bottom: 24px; z-index: 60;
+      width: 62px; height: 62px; border-radius: 50%;
+      background: var(--primary); color: var(--primary-fg);
+      border: none; font-size: 30px; line-height: 1; cursor: pointer;
+      box-shadow: var(--sh-float);
+      display: flex; align-items: center; justify-content: center;
+      transition: transform .25s, box-shadow .25s;
+    }
+    .fab:hover { transform: scale(1.08) translateY(-2px); box-shadow: var(--sh-deep); }
+    .fab:active { transform: scale(.95); }
+
+    /* ======================================
+       BACK BUTTON（畫面 2/3 回行事曆）
+    ====================================== */
+    .back-btn {
+      background: transparent; border: 2px solid var(--border);
+      color: var(--muted-fg); border-radius: 999px;
+      padding: 8px 16px; font-family: 'Nunito', sans-serif;
+      font-weight: 700; font-size: 13px; cursor: pointer;
+      transition: all .25s; display: flex; align-items: center; gap: 5px;
+    }
+    .back-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+    /* ======================================
+       MODAL（明細展開 / 修改）
+    ====================================== */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 120;
+      background: rgba(44,44,36,.4);
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      display: none; align-items: flex-end; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-card {
+      background: var(--card);
+      width: 100%; max-width: 560px;
+      border-radius: 36px 36px 0 0;
+      padding: 22px 22px 30px;
+      box-shadow: var(--sh-deep);
+      max-height: 88vh; overflow-y: auto;
+      animation: sheetin .3s ease both;
+    }
+    @keyframes sheetin {
+      from { transform: translateY(46px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+    .modal-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 12px; margin-bottom: 4px;
+    }
+    .modal-title { font-family: 'Fraunces', serif; font-weight: 700; font-size: 20px; }
+    .modal-sub { color: var(--muted-fg); font-size: 13px; margin-bottom: 18px; }
+    .modal-close {
+      width: 34px; height: 34px; flex-shrink: 0;
+      background: var(--muted); border: none; color: var(--accent-fg);
+      border-radius: 50%; font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s, transform .2s;
+    }
+    .modal-close:hover { background: var(--destructive); color: #fff; transform: rotate(90deg); }
+
+    .detail-item {
+      padding: 14px 16px; margin-bottom: 10px;
+      background: rgba(93,112,82,.05);
+      border: 1px solid rgba(93,112,82,.13);
+      border-radius: 20px;
+    }
+    .detail-item:last-child { margin-bottom: 0; }
+    .detail-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .detail-name { font-family: 'Fraunces', serif; font-weight: 700; font-size: 16px; }
+    .detail-figs { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--muted-fg); margin-top: 6px; }
+    .detail-figs strong { color: var(--fg); }
+    .detail-figs .fig-eff strong { color: var(--primary); }
+    .detail-figs .fig-edited { color: var(--secondary); }
+    .edit-mini-btn {
+      background: rgba(193,140,93,.12); border: none; color: var(--secondary);
+      border-radius: 999px; padding: 6px 14px; flex-shrink: 0;
+      font-family: 'Nunito', sans-serif; font-weight: 700; font-size: 12px;
+      cursor: pointer; transition: all .2s;
+    }
+    .edit-mini-btn:hover { background: var(--secondary); color: #fff; }
+
+    .edit-form {
+      margin-top: 12px; padding-top: 12px;
+      border-top: 1px dashed rgba(222,216,207,.8);
+      display: none;
+    }
+    .edit-form.open { display: block; animation: cardin .25s ease both; }
+    .edit-form label { margin-left: 6px; }
+    .edit-form-row { display: flex; gap: 8px; align-items: center; }
+    .edit-form-row input { flex: 1; height: 44px; }
+    .edit-save-btn {
+      height: 44px; padding: 0 18px; flex-shrink: 0;
+      background: var(--primary); color: var(--primary-fg);
+      border: none; border-radius: 999px;
+      font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 14px;
+      cursor: pointer; transition: transform .2s;
+    }
+    .edit-save-btn:hover { transform: scale(1.03); }
+    .edit-delta { font-size: 12px; color: var(--muted-fg); margin: 8px 0 0 6px; min-height: 16px; }
+    .edit-delta strong { font-family: 'Fraunces', serif; }
+
+    /* ======================================
        LOADING OVERLAY
     ====================================== */
     #loading-overlay {
@@ -437,10 +659,56 @@
     </div>
   </div>
 
+  <!-- ==================== SCREEN CAL : CALENDAR ==================== -->
+  <div id="screen-cal" class="screen" style="display:none">
+
+    <div class="top-bar">
+      <div class="user-info">
+        <div class="avatar" id="cal-av"></div>
+        <div>
+          <div class="user-name" id="cal-nm"></div>
+          <div class="user-label">打帳者</div>
+        </div>
+      </div>
+      <button class="logout-btn" onclick="doLogout()">登出</button>
+    </div>
+
+    <div class="cal-card">
+      <div class="cal-nav">
+        <div class="cal-nav-left">
+          <button class="cal-arrow" onclick="changeMonth(-1)" title="上個月">‹</button>
+          <span class="cal-month-label" id="cal-month-label"></span>
+          <button class="cal-arrow" onclick="changeMonth(1)" title="下個月">›</button>
+        </div>
+        <div class="cal-tools">
+          <button class="cal-today-btn" onclick="gotoToday()">今天</button>
+          <button class="cal-toggle" id="cal-toggle" onclick="toggleTitles()" title="顯示/隱藏標題文字">👁</button>
+        </div>
+      </div>
+
+      <div class="cal-weekdays">
+        <div class="cal-weekday wend">日</div>
+        <div class="cal-weekday">一</div>
+        <div class="cal-weekday">二</div>
+        <div class="cal-weekday">三</div>
+        <div class="cal-weekday">四</div>
+        <div class="cal-weekday">五</div>
+        <div class="cal-weekday wend">六</div>
+      </div>
+
+      <div class="cal-grid" id="cal-grid"></div>
+      <div class="cal-empty-hint" id="cal-empty-hint" style="display:none">這個月還沒有帳目，點右下角 ＋ 新增一筆</div>
+    </div>
+  </div>
+
+  <!-- 右下角新增按鈕（只在行事曆顯示） -->
+  <button class="fab" id="fab-add" onclick="openPayment()" title="新增打帳單" style="display:none">＋</button>
+
   <!-- ==================== SCREEN 2 : PAYMENT INPUT ==================== -->
   <div id="screen-2" class="screen" style="display:none">
 
     <div class="top-bar">
+      <button class="back-btn" onclick="backToCalendar()">‹ 行事曆</button>
       <div class="user-info">
         <div class="avatar" id="s2-av"></div>
         <div>
@@ -448,7 +716,6 @@
           <div class="user-label">打帳者</div>
         </div>
       </div>
-      <button class="logout-btn" onclick="doLogout()">登出</button>
     </div>
 
     <!-- Block A：訂單資訊 -->
@@ -528,7 +795,22 @@
       <div id="results-list"></div>
     </div>
 
-    <button class="submit-btn" onclick="resetScreen2()">再扣一筆</button>
+    <button class="submit-btn" onclick="backToCalendar()">回行事曆</button>
+    <button class="add-btn" style="margin-top:10px" onclick="resetScreen2()">再扣一筆</button>
+  </div>
+
+  <!-- ==================== ORDER DETAIL MODAL ==================== -->
+  <div class="modal-overlay" id="detail-modal" onclick="if(event.target===this)closeDetail()">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="modal-title" id="detail-title"></div>
+        </div>
+        <button class="modal-close" onclick="closeDetail()">✕</button>
+      </div>
+      <div class="modal-sub" id="detail-sub"></div>
+      <div id="detail-list"></div>
+    </div>
   </div>
 
   <!-- ==================== LOADING OVERLAY ==================== -->
@@ -552,6 +834,13 @@
     /* 主名單欄位索引 (A=0) */
     const C = { NAME:0, BALANCE:2, ROLE:5, WALLET:6, OVERDUE:7, PASSWORD:10 };
 
+    /* 金流紀錄表欄位索引 (A=0) */
+    const F = { TITLE:0, NAME:1, TYPE:2, AMT:3, DELIVERY:4, CHANGE:5,
+                BAL_BEFORE:6, BAL_AFTER:7, OP:8, NOTE:9, TS:10, WALLET:11, DATE:12 };
+
+    /* 本機測試模式：網址加 ?mock=1 即用假資料、跳過 Google 登入 */
+    const MOCK = new URLSearchParams(location.search).has('mock');
+
     /* ============================================================
        STATE
     ============================================================ */
@@ -562,10 +851,19 @@
     let rows     = [];    // payment rows in screen 2
     let results  = [];    // result items for screen 3
 
+    /* 行事曆狀態 */
+    let flowData     = [];    // 金流紀錄原始列
+    let ordersByDate = {};    // 'YYYY-MM-DD' → [order]
+    let calYear      = 0;
+    let calMonth     = 0;     // 0-11
+    let showTitles   = true;  // 是否顯示明細標題文字
+    let activeOrder  = null;  // 目前展開中的訂單
+
     /* ============================================================
        APPS SCRIPT API helper
     ============================================================ */
     async function callScript(action, payload = null) {
+      if (MOCK) return mockApi(action, payload);
       if (!CFG.SCRIPT_URL) throw new Error('請先設定 CFG.SCRIPT_URL');
       let url = `${CFG.SCRIPT_URL}?action=${action}`;
       if (payload !== null) url += `&data=${encodeURIComponent(JSON.stringify(payload))}`;
@@ -589,6 +887,318 @@
       });
     }
 
+    async function loadFlow() {
+      const d = await callScript('getFlow');
+      flowData = d.values || [];
+    }
+
+    /* ============================================================
+       CALENDAR — 資料整理
+    ============================================================ */
+    /* 把一列金流的日期正規化成 YYYY-MM-DD（優先打單日期，否則用送出時間 ts 補） */
+    function rowDate(row) {
+      return normDate(row[F.DATE]) || normDate(row[F.TS]);
+    }
+    function normDate(s) {
+      if (s === undefined || s === null) return null;
+      const m = String(s).trim().match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+      return m ? `${m[1]}-${pad(+m[2])}-${pad(+m[3])}` : null;
+    }
+
+    /* 依「日期 + 標題」分組成訂單；每筆訂單彙整每人金額 */
+    function buildOrders() {
+      ordersByDate = {};
+      const map = {};
+      flowData.forEach(row => {
+        const date = rowDate(row);
+        if (!date) return;
+        const title = (row[F.TITLE] || '(無標題)') + '';
+        const key = date + '||' + title;
+        let o = map[key];
+        if (!o) {
+          o = map[key] = { key, date, title, op: row[F.OP] || '', persons: {}, order: [] };
+          (ordersByDate[date] = ordersByDate[date] || []).push(o);
+        }
+        const type = (row[F.TYPE] || '') + '';
+        const name = (row[F.NAME] || '') + '';
+        const change = parseFloat(row[F.CHANGE]) || 0;
+        if (type === '服務費收入') return; // 打帳者收入，不列在訂單明細
+        if (!name) return;
+        let p = o.persons[name];
+        if (!p) { p = o.persons[name] = { name, deduction: 0, svcFee: 0, corrections: 0, amt: 0 }; o.order.push(name); }
+        if (type === '扣款')      { p.deduction += -change; p.amt += parseFloat(row[F.AMT]) || 0; }
+        else if (type === '服務費') { p.svcFee += -change; }
+        else if (type === '修改')   { p.corrections += change; }
+      });
+    }
+
+    /* 某人在該訂單目前的「實際扣款」（含修改後） */
+    function effDeduction(p) { return round2(p.deduction - p.corrections); }
+
+    /* ============================================================
+       CALENDAR — 進入 / 重新整理
+    ============================================================ */
+    async function enterCalendar() {
+      goScreen('cal');
+      g('cal-av').textContent = me.name[0];
+      g('cal-nm').textContent = me.name;
+      const now = new Date();
+      calYear = now.getFullYear();
+      calMonth = now.getMonth();
+      await refreshCalendar();
+    }
+
+    async function refreshCalendar() {
+      try {
+        loading('讀取帳目...');
+        await loadFlow();
+        buildOrders();
+        unload();
+        renderCalendar();
+      } catch (e) {
+        unload();
+        alert('讀取帳目失敗：' + e.message);
+        renderCalendar();
+      }
+    }
+
+    function backToCalendar() {
+      closeDetail();
+      enterCalendar();
+    }
+
+    /* ============================================================
+       CALENDAR — 渲染
+    ============================================================ */
+    function renderCalendar() {
+      g('cal-month-label').textContent = `${calYear} 年 ${calMonth + 1} 月`;
+      const grid = g('cal-grid');
+      grid.innerHTML = '';
+
+      const startDow = new Date(calYear, calMonth, 1).getDay(); // 0=日
+      const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+      const todayKey = toYMD(new Date());
+      let monthHasOrders = false;
+
+      for (let i = 0; i < startDow; i++) grid.appendChild(mk('div', 'cal-cell cal-cell-empty'));
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const key = `${calYear}-${pad(calMonth + 1)}-${pad(d)}`;
+        const cell = mk('div', 'cal-cell');
+        if (key === todayKey) cell.classList.add('is-today');
+
+        const num = mk('div', 'cal-day-num');
+        num.textContent = d;
+        cell.appendChild(num);
+
+        const orders = ordersByDate[key] || [];
+        if (orders.length) {
+          monthHasOrders = true;
+          cell.classList.add('has-orders');
+          const list = mk('div', 'cal-events');
+          orders.forEach(o => {
+            const ev = mk('button', 'cal-event');
+            ev.textContent = o.title;
+            ev.title = o.title;
+            ev.onclick = () => openOrderDetail(o.key);
+            list.appendChild(ev);
+          });
+          cell.appendChild(list);
+        }
+        grid.appendChild(cell);
+      }
+      g('cal-empty-hint').style.display = monthHasOrders ? 'none' : 'block';
+    }
+
+    function changeMonth(delta) {
+      calMonth += delta;
+      if (calMonth < 0) { calMonth = 11; calYear--; }
+      else if (calMonth > 11) { calMonth = 0; calYear++; }
+      renderCalendar();
+    }
+
+    function gotoToday() {
+      const now = new Date();
+      calYear = now.getFullYear();
+      calMonth = now.getMonth();
+      renderCalendar();
+    }
+
+    function toggleTitles() {
+      showTitles = !showTitles;
+      g('screen-cal').classList.toggle('hide-titles', !showTitles);
+      g('cal-toggle').classList.toggle('active', !showTitles);
+      g('cal-toggle').textContent = showTitles ? '👁' : '🙈';
+    }
+
+    /* ============================================================
+       CALENDAR — 明細展開 / 修改
+    ============================================================ */
+    function findOrder(key) {
+      for (const date in ordersByDate) {
+        const o = ordersByDate[date].find(x => x.key === key);
+        if (o) return o;
+      }
+      return null;
+    }
+
+    function openOrderDetail(key) {
+      const o = findOrder(key);
+      if (!o) return;
+      activeOrder = o;
+      g('detail-title').textContent = o.title;
+      g('detail-sub').textContent = `${o.date}　·　打帳者 ${o.op || '—'}`;
+      renderDetailList();
+      g('detail-modal').classList.add('open');
+    }
+
+    function renderDetailList() {
+      const o = activeOrder;
+      const wrap = g('detail-list');
+      wrap.innerHTML = '';
+      o.order.forEach(name => {
+        const p = o.persons[name];
+        const eff = effDeduction(p);
+        const edited = Math.abs(p.corrections) > 0.001;
+
+        const item = mk('div', 'detail-item');
+        const figs = `
+          <div class="detail-figs">
+            <span>訂單金額 <strong>${round2(p.amt)} 元</strong></span>
+            <span>服務費 <strong>${round2(p.svcFee)} 元</strong></span>
+            <span class="fig-eff">實際扣款 <strong>${eff} 元</strong></span>
+            ${edited ? `<span class="fig-edited">✎ 已修改（原 ${round2(p.deduction)}）</span>` : ''}
+          </div>`;
+        item.innerHTML = `
+          <div class="detail-top">
+            <div>
+              <div class="detail-name">${name}</div>
+            </div>
+            <button class="edit-mini-btn" onclick="toggleEdit('${cssName(name)}')">修改</button>
+          </div>
+          ${figs}
+          <div class="edit-form" id="edit-${cssName(name)}">
+            <label>修改後的實際扣款（元）</label>
+            <div class="edit-form-row">
+              <input type="number" id="editval-${cssName(name)}" value="${eff}" min="0"
+                     oninput="previewDelta('${cssName(name)}', ${eff})">
+              <button class="edit-save-btn" onclick="saveCorrection('${jsName(name)}')">確認</button>
+            </div>
+            <div class="edit-delta" id="delta-${cssName(name)}"></div>
+          </div>`;
+        wrap.appendChild(item);
+      });
+    }
+
+    function toggleEdit(safe) {
+      const f = g('edit-' + safe);
+      if (f) f.classList.toggle('open');
+    }
+
+    function previewDelta(safe, curEff) {
+      const v = parseFloat(g('editval-' + safe).value);
+      const box = g('delta-' + safe);
+      if (isNaN(v)) { box.innerHTML = ''; return; }
+      const delta = round2(curEff - v); // 正=退款回餘額, 負=再扣
+      if (delta === 0) { box.innerHTML = '與目前相同，不會新增紀錄'; return; }
+      box.innerHTML = delta > 0
+        ? `將<strong>退回 ${delta} 元</strong>到餘額（新增一筆修改流水帳）`
+        : `將<strong>再扣 ${-delta} 元</strong>（新增一筆修改流水帳）`;
+    }
+
+    async function saveCorrection(name) {
+      const o = activeOrder;
+      const p = o.persons[name];
+      const safe = cssName(name);
+      const newEff = parseFloat(g('editval-' + safe).value);
+      if (isNaN(newEff) || newEff < 0) { alert('請輸入有效金額'); return; }
+      const curEff = effDeduction(p);
+      const delta = round2(curEff - newEff);
+      if (delta === 0) { alert('金額沒有變動'); return; }
+
+      try {
+        loading('讀取最新餘額...');
+        await loadList();
+        const entry = rowMap[name];
+        if (!entry) throw new Error(`主名單找不到成員：${name}`);
+        const balBefore = parseFloat(entry.data[C.BALANCE]) || 0;
+        const balAfter  = round2(balBefore + delta);
+        const ts        = new Date().toLocaleString('zh-TW');
+        const wallet    = entry.data[C.WALLET] || '';
+        const note      = `修改實際扣款 ${curEff}→${newEff}`;
+
+        /* 新增一筆「修改」流水帳，不動原始紀錄 */
+        const flowRows = [[
+          o.title, name, '修改', 0, 0, delta,
+          balBefore, balAfter, me.name, note, ts, wallet, o.date
+        ]];
+        const balanceUpdates = [{ row: entry.rowNum, value: balAfter }];
+
+        loading('寫入修改...');
+        await callScript('submit', { flowRows, balanceUpdates });
+
+        loading('重新整理...');
+        await loadFlow();
+        buildOrders();
+        unload();
+        renderCalendar();
+
+        const updated = findOrder(o.key);   // 重新指向更新後的訂單
+        if (updated) { activeOrder = updated; renderDetailList(); }
+        else closeDetail();
+      } catch (e) {
+        unload();
+        alert('修改失敗：' + e.message);
+      }
+    }
+
+    function closeDetail() {
+      g('detail-modal').classList.remove('open');
+      activeOrder = null;
+    }
+
+    /* 把姓名轉成可安全用於 id 的字串 */
+    function cssName(n) { return encodeURIComponent(n).replace(/[%]/g, '_'); }
+    function jsName(n)  { return String(n).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
+    /* ============================================================
+       MOCK（本機測試用假資料）
+    ============================================================ */
+    let _mockList = null, _mockFlow = null;
+    function buildMock() {
+      const now = new Date();
+      const y = now.getFullYear(), m = now.getMonth();
+      const dk = d => `${y}-${pad(m + 1)}-${pad(d)}`;
+      _mockList = [
+        ['小明', '', 480, '', '', '', '現金', '', '', '', '1234'],
+        ['小華', '', 250, '', '', '', '現金', '', '', '', ''],
+        ['小美', '', 90,  '', '', '', '現金', '低額逾期', '', '', ''],
+        ['阿強', '', 600, '', '', '', '現金', '', '', '', ''],
+      ];
+      _mockFlow = [
+        ['5號 午餐', '小華', '扣款', 120, 0, -120, 370, 250, '小明', '', '', '現金', dk(5)],
+        ['5號 午餐', '小華', '服務費', 0, 0, -2, 250, 248, '小明', '', '', '現金', dk(5)],
+        ['5號 午餐', '小美', '扣款', 95, 0, -95, 185, 90, '小明', '', '', '現金', dk(5)],
+        ['12號 聚餐', '阿強', '扣款', 200, 30, -215, 815, 600, '小明', '', '', '現金', dk(12)],
+        ['12號 聚餐', '小明', '扣款', 150, 30, -165, 645, 480, '小明', '', '', '現金', dk(12)],
+        ['18號 飲料', '小美', '扣款', 55, 0, -55, 145, 90, '小明', '', '', '現金', dk(18)],
+      ];
+    }
+    function mockApi(action, payload) {
+      if (!_mockList) buildMock();
+      if (action === 'getList') return Promise.resolve({ values: _mockList });
+      if (action === 'getFlow') return Promise.resolve({ values: _mockFlow.map(r => r.map(String)) });
+      if (action === 'submit') {
+        (payload.flowRows || []).forEach(r => _mockFlow.push(r));
+        (payload.balanceUpdates || []).forEach(u => {
+          const idx = u.row - 2;
+          if (_mockList[idx]) _mockList[idx][C.BALANCE] = u.value;
+        });
+        return Promise.resolve({ ok: true });
+      }
+      return Promise.resolve({ ok: true });
+    }
+
     /* ============================================================
        SCREEN 1 — LOGIN
     ============================================================ */
@@ -597,6 +1207,14 @@
         loading('載入名單...');
         await loadList();
         unload();
+        if (MOCK) {
+          // 本機測試：自動以第一個有密碼的打帳者登入，直接進行事曆
+          const cashier = listData.find(r => r[C.NAME] && r[C.PASSWORD]) || listData[0];
+          const name = cashier[C.NAME];
+          me = { name, rowNum: rowMap[name].rowNum, data: rowMap[name].data };
+          enterCalendar();
+          return;
+        }
         const sel = g('login-name');
         sel.innerHTML = '<option value="">請選擇姓名</option>';
         listData.forEach(r => {
@@ -624,6 +1242,11 @@
         showE('err-login', '姓名或密碼錯誤'); return;
       }
       me = { name, rowNum: entry.rowNum, data: entry.data };
+      enterCalendar();
+    }
+
+    /* 從行事曆右下角 ＋ 進入打帳單 */
+    function openPayment() {
       goScreen(2);
       setupS2();
     }
@@ -738,9 +1361,10 @@
 
         const delivery = parseFloat(g('delivery').value) || 0;
         const discount = parseFloat(g('discount').value) || 0;
-        const uc       = uniqueCount();
-        const ts       = new Date().toLocaleString('zh-TW');
-        const op       = me.name;
+        const uc        = uniqueCount();
+        const ts        = new Date().toLocaleString('zh-TW');
+        const op        = me.name;
+        const orderDate = g('order-date').value || today(); // M 欄：打單日期 (YYYY-MM-DD)
 
         /* find 打帳者（K 欄有值者即為打帳者） */
         const cashierEntry = Object.values(rowMap).find(e =>
@@ -775,19 +1399,19 @@
           const b1 = bal[name];
           bal[name] = Math.round((b1 - deduction) * 100) / 100;
           flowRows.push([title, name, '扣款', amt, delivery, -deduction,
-                         b1, bal[name], op, '', ts, wallet]);
+                         b1, bal[name], op, '', ts, wallet, orderDate]);
 
           /* 2. 服務費扣除 */
           const b2 = bal[name];
           bal[name] = Math.round((b2 - svcFee) * 100) / 100;
           flowRows.push([title, name, '服務費', 0, 0, -svcFee,
-                         b2, bal[name], op, '', ts, wallet]);
+                         b2, bal[name], op, '', ts, wallet, orderDate]);
 
           /* 3. 服務費儲入打帳者 */
           const b3 = bal[cashier];
           bal[cashier] = Math.round((b3 + svcFee) * 100) / 100;
           flowRows.push([title, cashier, '服務費收入', 0, 0, svcFee,
-                         b3, bal[cashier], op, '', ts, '']);
+                         b3, bal[cashier], op, '', ts, '', orderDate]);
 
           results.push({ name, deduction, svcFee, newBal: bal[name] });
         }
@@ -837,10 +1461,12 @@
        NAVIGATION & HELPERS
     ============================================================ */
     function goScreen(n) {
-      [1, 2, 3].forEach(i => {
-        g(`screen-${i}`).style.display =
-          i !== n ? 'none' : (i === 1 ? 'flex' : 'block');
+      ['1', 'cal', '2', '3'].forEach(i => {
+        const el = g(`screen-${i}`);
+        if (!el) return;
+        el.style.display = (String(i) === String(n)) ? (i === '1' ? 'flex' : 'block') : 'none';
       });
+      g('fab-add').style.display = (String(n) === 'cal') ? 'flex' : 'none';
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -860,6 +1486,9 @@
     function loading(msg)   { g('loading-text').textContent = msg; g('loading-overlay').style.display = 'flex'; }
     function unload()       { g('loading-overlay').style.display = 'none'; }
     function today()        { return new Date().toISOString().split('T')[0]; }
+    function round2(n)      { return Math.round((parseFloat(n) || 0) * 100) / 100; }
+    function pad(n)         { return String(n).padStart(2, '0'); }
+    function toYMD(d)       { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
 
     /* 頁面載入時自動讀取名單 */
     window.addEventListener('DOMContentLoaded', loadAndLogin);

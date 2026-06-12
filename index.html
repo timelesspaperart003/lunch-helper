@@ -429,6 +429,7 @@
     }
     .cal-toggle:hover { background: var(--accent); }
     .cal-toggle.active { background: var(--primary); color: var(--primary-fg); }
+    .cal-toggle svg { width: 18px; height: 18px; display: block; }
 
     .cal-weekdays {
       display: grid; grid-template-columns: repeat(7, 1fr);
@@ -660,7 +661,7 @@
   </div>
 
   <!-- ==================== SCREEN CAL : CALENDAR ==================== -->
-  <div id="screen-cal" class="screen" style="display:none">
+  <div id="screen-cal" class="screen hide-titles" style="display:none">
 
     <div class="top-bar">
       <div class="user-info">
@@ -682,7 +683,7 @@
         </div>
         <div class="cal-tools">
           <button class="cal-today-btn" onclick="gotoToday()">今天</button>
-          <button class="cal-toggle" id="cal-toggle" onclick="toggleTitles()" title="顯示/隱藏標題文字">👁</button>
+          <button class="cal-toggle active" id="cal-toggle" onclick="toggleTitles()" title="顯示/隱藏標題文字" aria-label="顯示或隱藏標題文字"></button>
         </div>
       </div>
 
@@ -856,7 +857,7 @@
     let ordersByDate = {};    // 'YYYY-MM-DD' → [order]
     let calYear      = 0;
     let calMonth     = 0;     // 0-11
-    let showTitles   = true;  // 是否顯示明細標題文字
+    let showTitles   = false; // 是否顯示明細標題文字（預設隱藏，手機塞不下）
     let activeOrder  = null;  // 目前展開中的訂單
 
     /* ============================================================
@@ -966,6 +967,7 @@
     ============================================================ */
     async function enterCalendar() {
       goScreen('cal');
+      applyTitleVisibility();
       g('cal-av').textContent = me.name[0];
       g('cal-nm').textContent = me.name;
       const now = new Date();
@@ -1050,11 +1052,17 @@
       renderCalendar();
     }
 
-    function toggleTitles() {
-      showTitles = !showTitles;
+    /* 細線眼睛圖示（feather 風格），跟隨按鈕文字色 currentColor */
+    const ICON_EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+    const ICON_EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.9 5.1A9.6 9.6 0 0 1 12 5c6.5 0 10 7 10 7a17.8 17.8 0 0 1-2.2 3.1M6.2 6.2A17.7 17.7 0 0 0 2 12s3.5 7 10 7a9.5 9.5 0 0 0 3.8-.8"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><line x1="3" y1="3" x2="21" y2="21"/></svg>';
+    function applyTitleVisibility() {
       g('screen-cal').classList.toggle('hide-titles', !showTitles);
       g('cal-toggle').classList.toggle('active', !showTitles);
-      g('cal-toggle').textContent = showTitles ? '👁' : '🙈';
+      g('cal-toggle').innerHTML = showTitles ? ICON_EYE : ICON_EYE_OFF;
+    }
+    function toggleTitles() {
+      showTitles = !showTitles;
+      applyTitleVisibility();
     }
 
     /* ============================================================

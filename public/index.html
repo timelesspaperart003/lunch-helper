@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>午餐錢小幫手</title>
+  <title>午餐錢小幫手2.0</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -653,7 +653,7 @@
       <div id="phase-b">
         <div class="login-card">
           <div class="login-logo-wrap"><div class="login-logo">🌿</div></div>
-          <h1 class="login-title">午餐錢小幫手</h1>
+          <h1 class="login-title">午餐錢小幫手2.0</h1>
           <p class="login-sub">請登入以繼續</p>
           <div id="err-login" class="err-msg" style="display:none"></div>
           <div class="field">
@@ -719,6 +719,32 @@
 
   <!-- 右下角新增按鈕（只在行事曆顯示） -->
   <button class="fab" id="fab-add" onclick="openPayment()" title="新增打帳單" style="display:none">＋</button>
+  <button class="fab" id="fab-topup" onclick="openTopup()" title="新增儲值" style="display:none; right:22px; bottom:96px; background:var(--secondary);">💰</button>
+
+  <!-- ==================== 儲值 MODAL ==================== -->
+  <div class="modal-overlay" id="topup-modal" onclick="if(event.target===this)closeTopup()">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div><div class="modal-title">新增儲值</div></div>
+        <button class="modal-close" onclick="closeTopup()">✕</button>
+      </div>
+      <div class="modal-sub">幫人員記一筆存入午餐基金的金額</div>
+      <div id="err-topup" class="err-msg" style="display:none"></div>
+      <div class="field">
+        <label>姓名</label>
+        <select id="topup-name"><option value="">請選擇姓名</option></select>
+      </div>
+      <div class="field">
+        <label>儲值金額（元）</label>
+        <input type="number" id="topup-amt" min="0" placeholder="金額">
+      </div>
+      <div class="field">
+        <label>備註</label>
+        <input type="text" id="topup-note" placeholder="例：現金儲值">
+      </div>
+      <button class="submit-btn" onclick="submitTopup()">確認儲值</button>
+    </div>
+  </div>
 
   <!-- ==================== SCREEN 2 : PAYMENT INPUT ==================== -->
   <div id="screen-2" class="screen" style="display:none">
@@ -1227,6 +1253,67 @@
       activeOrder = null;
     }
 
+    /* ============================================================
+       儲值
+    ============================================================ */
+    function openTopup() {
+      const sel = g('topup-name');
+      sel.innerHTML = '<option value="">請選擇姓名</option>';
+      allNames.forEach(n => {
+        const o = document.createElement('option');
+        o.value = o.textContent = n;
+        sel.appendChild(o);
+      });
+      g('topup-amt').value = '';
+      g('topup-note').value = '';
+      hideE('err-topup');
+      g('topup-modal').classList.add('open');
+    }
+
+    function closeTopup() {
+      g('topup-modal').classList.remove('open');
+    }
+
+    async function submitTopup() {
+      const name = g('topup-name').value;
+      const amt  = parseFloat(g('topup-amt').value);
+      const note = g('topup-note').value.trim();
+      hideE('err-topup');
+      if (!name)            { showE('err-topup', '請選擇姓名'); return; }
+      if (!amt || amt <= 0) { showE('err-topup', '請輸入有效金額'); return; }
+
+      try {
+        loading('讀取最新餘額...');
+        await loadList(); // 重新讀取，避免用到舊餘額
+        const entry = rowMap[name];
+        if (!entry) throw new Error('找不到成員：' + name);
+
+        const balBefore = parseFloat(entry.data[C.BALANCE]) || 0;
+        const balAfter  = round2(balBefore + amt);
+        const ts        = new Date().toLocaleString('zh-TW');
+        const wallet    = entry.data[C.WALLET] || '';
+        const d         = new Date();
+        const title     = `${d.getMonth() + 1}/${d.getDate()} 儲值`;
+
+        const flowRows = [[
+          title, name, '儲值', 0, 0, amt,
+          balBefore, balAfter, me.name, note, ts, wallet, today()
+        ]];
+        const balanceUpdates = [{ row: entry.rowNum, value: balAfter }];
+
+        loading('寫入儲值...');
+        await callScript('submit', { flowRows, balanceUpdates });
+
+        loading('重新整理...');
+        closeTopup();
+        await refreshCalendar();
+        unload();
+      } catch (e) {
+        unload();
+        showE('err-topup', '送出失敗：' + e.message);
+      }
+    }
+
     /* 把姓名轉成可安全用於 id 的字串 */
     function cssName(n) { return encodeURIComponent(n).replace(/[%]/g, '_'); }
     function jsName(n)  { return String(n).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
@@ -1314,7 +1401,10 @@
       if (!name) { showE('err-login', '請選擇姓名'); return; }
       if (!pwd)  { showE('err-login', '請輸入密碼'); return; }
       const entry = rowMap[name];
-      if (!entry || pwd !== (entry.data[C.PASSWORD] || '')) {
+      /* 密碼欄若在試算表打成純數字，Google Sheet 會存成數字型別，
+         這裡一律轉成字串比對，避免 '1234' !== 1234 導致誤判密碼錯誤 */
+      const savedPwd = String(entry ? (entry.data[C.PASSWORD] || '') : '').trim();
+      if (!entry || String(pwd).trim() !== savedPwd) {
         showE('err-login', '姓名或密碼錯誤'); return;
       }
       me = { name, rowNum: entry.rowNum, data: entry.data };
@@ -1641,6 +1731,7 @@
         el.style.display = (String(i) === String(n)) ? (i === '1' ? 'flex' : 'block') : 'none';
       });
       g('fab-add').style.display = (String(n) === 'cal') ? 'flex' : 'none';
+      g('fab-topup').style.display = (String(n) === 'cal') ? 'flex' : 'none';
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 

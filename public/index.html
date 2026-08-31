@@ -908,7 +908,8 @@
     let calYear      = 0;
     let calMonth     = 0;     // 0-11
     let showTitles   = false; // 是否顯示明細標題文字（預設隱藏，手機塞不下）
-    let activeOrder  = null;  // 目前展開中的訂單
+    let activeOrder  = null;  // 目前展開中的訂單（單筆檢視用）
+    let activeDay    = null;  // 目前展開中的日期字串（整天檢視用，跟 activeOrder 二選一）
 
     /* ============================================================
        APPS SCRIPT API helper
@@ -1089,6 +1090,9 @@
         if (orders.length) {
           monthHasOrders = true;
           cell.classList.add('has-orders');
+          num.style.cursor = 'pointer';
+          num.title = '看這天全部的紀錄';
+          num.onclick = () => openDayDetail(key);
           const list = mk('div', 'cal-events');
           orders.forEach(o => {
             const ev = mk('button', 'cal-event ' + (o.hasDeduction ? 'ev-expense' : (o.hasTopup ? 'ev-topup' : '')));
@@ -1146,66 +1150,92 @@
       const o = findOrder(key);
       if (!o) return;
       activeOrder = o;
+      activeDay = null;
       g('detail-title').textContent = o.title;
       g('detail-sub').textContent = `${o.date}　·　打帳者 ${o.op || '—'}`;
       renderDetailList();
       g('detail-modal').classList.add('open');
     }
 
+    /* 點行事曆上的日期數字：一次列出這天全部的紀錄，不用一個一個點色塊 */
+    function openDayDetail(dateKey) {
+      const orders = ordersByDate[dateKey] || [];
+      if (!orders.length) return;
+      activeOrder = null;
+      activeDay = dateKey;
+      g('detail-title').textContent = dateKey;
+      g('detail-sub').textContent = `共 ${orders.length} 筆紀錄`;
+      renderDetailList();
+      g('detail-modal').classList.add('open');
+    }
+
     function renderDetailList() {
-      const o = activeOrder;
+      const orders = activeDay ? (ordersByDate[activeDay] || []) : (activeOrder ? [activeOrder] : []);
       const wrap = g('detail-list');
       wrap.innerHTML = '';
-      o.order.forEach(name => {
-        const p = o.persons[name];
-        const eff = effDeduction(p);
-        const edited = Math.abs(p.corrections) > 0.001;
-
-        /* 純儲值列（有儲值、無扣款/服務費）：只顯示儲值金額，不提供修改 */
-        const isTopup = p.topup > 0.001 &&
-                        Math.abs(p.deduction) < 0.001 && Math.abs(p.svcFee) < 0.001;
-        if (isTopup) {
-          const tItem = mk('div', 'detail-item');
-          tItem.innerHTML = `
-            <div class="detail-top">
-              <div><div class="detail-name">${name}</div></div>
-            </div>
-            <div class="detail-figs">
-              <span class="fig-eff">儲值金額 <strong>${round2(p.topup)} 元</strong></span>
-            </div>`;
-          wrap.appendChild(tItem);
-          return;
+      const showHeading = orders.length > 1 || !!activeDay;
+      orders.forEach(o => {
+        if (showHeading) {
+          const heading = mk('div', 'detail-name');
+          heading.style.margin = '14px 0 8px';
+          heading.textContent = `${o.title}　·　打帳者 ${o.op || '—'}`;
+          wrap.appendChild(heading);
         }
-
-        const canEdit = me && me.canOrder;
-        const item = mk('div', 'detail-item');
-        const figs = `
-          <div class="detail-figs">
-            <span>訂單金額 <strong>${round2(p.amt)} 元</strong></span>
-            <span>服務費 <strong>${round2(p.svcFee)} 元</strong></span>
-            <span class="fig-eff">實際扣款 <strong>${eff} 元</strong></span>
-            ${edited ? `<span class="fig-edited">✎ 已修改（原 ${round2(p.deduction)}）</span>` : ''}
-          </div>`;
-        item.innerHTML = `
-          <div class="detail-top">
-            <div>
-              <div class="detail-name">${name}</div>
-            </div>
-            ${canEdit ? `<button class="edit-mini-btn" onclick="toggleEdit('${cssName(name)}')">修改</button>` : ''}
-          </div>
-          ${figs}
-          ${canEdit ? `
-          <div class="edit-form" id="edit-${cssName(name)}">
-            <label>修改後的實際扣款（元）</label>
-            <div class="edit-form-row">
-              <input type="number" id="editval-${cssName(name)}" value="${eff}" min="0"
-                     oninput="previewDelta('${cssName(name)}', ${eff})">
-              <button class="edit-save-btn" onclick="saveCorrection('${jsName(name)}')">確認</button>
-            </div>
-            <div class="edit-delta" id="delta-${cssName(name)}"></div>
-          </div>` : ''}`;
-        wrap.appendChild(item);
+        o.order.forEach(name => wrap.appendChild(buildPersonItem_(o, name)));
       });
+    }
+
+    /* 同一天可能有好幾筆訂單，同一個人在不同訂單都可能出現，
+       所以用「訂單key + 姓名」組成不重複的 id，避免修改表單互相打架 */
+    function buildPersonItem_(o, name) {
+      const p = o.persons[name];
+      const eff = effDeduction(p);
+      const edited = Math.abs(p.corrections) > 0.001;
+      const idSuf = cssName(o.key) + '_' + cssName(name);
+
+      /* 純儲值列（有儲值、無扣款/服務費）：只顯示儲值金額，不提供修改 */
+      const isTopup = p.topup > 0.001 &&
+                      Math.abs(p.deduction) < 0.001 && Math.abs(p.svcFee) < 0.001;
+      if (isTopup) {
+        const tItem = mk('div', 'detail-item');
+        tItem.innerHTML = `
+          <div class="detail-top">
+            <div><div class="detail-name">${name}</div></div>
+          </div>
+          <div class="detail-figs">
+            <span class="fig-eff">儲值金額 <strong>${round2(p.topup)} 元</strong></span>
+          </div>`;
+        return tItem;
+      }
+
+      const canEdit = me && me.canOrder;
+      const item = mk('div', 'detail-item');
+      const figs = `
+        <div class="detail-figs">
+          <span>訂單金額 <strong>${round2(p.amt)} 元</strong></span>
+          <span>服務費 <strong>${round2(p.svcFee)} 元</strong></span>
+          <span class="fig-eff">實際扣款 <strong>${eff} 元</strong></span>
+          ${edited ? `<span class="fig-edited">✎ 已修改（原 ${round2(p.deduction)}）</span>` : ''}
+        </div>`;
+      item.innerHTML = `
+        <div class="detail-top">
+          <div>
+            <div class="detail-name">${name}</div>
+          </div>
+          ${canEdit ? `<button class="edit-mini-btn" onclick="toggleEdit('${idSuf}')">修改</button>` : ''}
+        </div>
+        ${figs}
+        ${canEdit ? `
+        <div class="edit-form" id="edit-${idSuf}">
+          <label>修改後的實際扣款（元）</label>
+          <div class="edit-form-row">
+            <input type="number" id="editval-${idSuf}" value="${eff}" min="0"
+                   oninput="previewDelta('${idSuf}', ${eff})">
+            <button class="edit-save-btn" onclick="saveCorrection('${jsName(o.key)}', '${jsName(name)}')">確認</button>
+          </div>
+          <div class="edit-delta" id="delta-${idSuf}"></div>
+        </div>` : ''}`;
+      return item;
     }
 
     function toggleEdit(safe) {
@@ -1224,11 +1254,12 @@
         : `將<strong>再扣 ${-delta} 元</strong>（新增一筆修改流水帳）`;
     }
 
-    async function saveCorrection(name) {
+    async function saveCorrection(orderKey, name) {
       if (!me || !me.canOrder) { alert('沒有修改權限'); return; }
-      const o = activeOrder;
+      const o = findOrder(orderKey);
+      if (!o) { alert('找不到這筆訂單，可能剛好被重新整理了，請重新開啟'); return; }
       const p = o.persons[name];
-      const safe = cssName(name);
+      const safe = cssName(o.key) + '_' + cssName(name);
       const newEff = parseFloat(g('editval-' + safe).value);
       if (isNaN(newEff) || newEff < 0) { alert('請輸入有效金額'); return; }
       const curEff = effDeduction(p);
@@ -1262,9 +1293,13 @@
         unload();
         renderCalendar();
 
-        const updated = findOrder(o.key);   // 重新指向更新後的訂單
-        if (updated) { activeOrder = updated; renderDetailList(); }
-        else closeDetail();
+        if (activeDay) {
+          renderDetailList(); // 整天視圖：activeDay 是日期字串，重建後直接照舊重畫即可
+        } else {
+          const updated = findOrder(o.key); // 單筆訂單視圖：物件是新的，要重新指到更新後的訂單
+          if (updated) { activeOrder = updated; renderDetailList(); }
+          else closeDetail();
+        }
       } catch (e) {
         unload();
         alert('修改失敗：' + e.message);
@@ -1274,6 +1309,7 @@
     function closeDetail() {
       g('detail-modal').classList.remove('open');
       activeOrder = null;
+      activeDay = null;
     }
 
     /* ============================================================

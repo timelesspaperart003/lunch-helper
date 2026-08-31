@@ -43,9 +43,10 @@ function setupSpreadsheet() {
   const ss = SpreadsheetApp.create('午餐錢小幫手（獨立版）');
   const main = ss.getSheets()[0];
   main.setName(MAIN_TAB);
-  main.getRange(1, 1, 1, 11).setValues([[
+  main.getRange(1, 1, 1, 13).setValues([[
     '姓名', 'LINE_ID', '餘額', '上次通知日', '註冊時間', '角色',
-    '共用錢包歸戶', '低額逾期狀態', '低額開始日', '最近提醒日', '登入密碼'
+    '共用錢包歸戶', '低額逾期狀態', '低額開始日', '最近提醒日', '登入密碼',
+    '可儲值', '可輸入訂單'
   ]]);
 
   const flow = ss.insertSheet(FLOW_TAB);
@@ -56,7 +57,23 @@ function setupSpreadsheet() {
 
   props.setProperty('SS_ID', ss.getId());
   Logger.log('新試算表已建立：' + ss.getUrl());
-  Logger.log('接下來請到「主名單表」手動建立初始名單（姓名 + 登入密碼欄填密碼，填了密碼才能登入）');
+  Logger.log('接下來請到「主名單表」手動建立初始名單（姓名 + 登入密碼欄填密碼，填了密碼才能登入；' +
+    '可儲值/可輸入訂單這兩欄填 V 代表有權限，空白代表沒有）');
+}
+
+// 一次性：幫已經建立過的舊試算表補上「可儲值」「可輸入訂單」這兩個新欄位(L、M)。
+// 如果是全新用 setupSpreadsheet() 建的試算表，已經內建這兩欄，不用跑這個。
+// 在 Apps Script 編輯器手動執行一次即可，重複執行也安全(已經有標題就不會重複加)。
+function addPermissionColumns() {
+  const ss = getSS_();
+  const sheet = ss.getSheetByName(MAIN_TAB);
+  const headers = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 11)).getValues()[0];
+  if (headers[11] === '可儲值' && headers[12] === '可輸入訂單') {
+    Logger.log('已經補過這兩欄了，不用重複執行。');
+    return;
+  }
+  sheet.getRange(1, 12, 1, 2).setValues([['可儲值', '可輸入訂單']]);
+  Logger.log('已補上「可儲值」(L欄)、「可輸入訂單」(M欄)。請到主名單表幫需要的人填 V。');
 }
 
 // 同事那套系統的 GAS 網址，只用來「讀」他的名單，不會寫回去
@@ -102,14 +119,14 @@ function importFromColleague() {
       updated++;
     } else {
       toAdd.push([
-        name, r[1] || '', r[2] || 0, '', '', r[5] || '', r[6] || '', '', '', '', ''
-        // 姓名/LINE_ID/餘額/(上次通知日空)/(註冊時間空)/角色/共用錢包歸戶/(低額逾期狀態空)/(低額開始日空)/(最近提醒日空)/登入密碼(不匯入，留空)
+        name, r[1] || '', r[2] || 0, '', '', r[5] || '', r[6] || '', '', '', '', '', '', ''
+        // 姓名/LINE_ID/餘額/(上次通知日空)/(註冊時間空)/角色/共用錢包歸戶/(低額逾期狀態空)/(低額開始日空)/(最近提醒日空)/登入密碼(不匯入)/可儲值(不匯入)/可輸入訂單(不匯入)
       ]);
       added++;
     }
   });
   if (toAdd.length) {
-    mainSheet.getRange(mainSheet.getLastRow() + 1, 1, toAdd.length, 11).setValues(toAdd);
+    mainSheet.getRange(mainSheet.getLastRow() + 1, 1, toAdd.length, 13).setValues(toAdd);
   }
   Logger.log('主名單表：新增 ' + added + ' 人、同步餘額 ' + updated + ' 人。密碼欄不會從同事那邊帶過來，要登入的人請自行設定密碼。');
 
@@ -180,7 +197,7 @@ function doGet(e) {
       const sheet = ss.getSheetByName(MAIN_TAB);
       const lastRow = sheet.getLastRow();
       if (lastRow < 2) return respond_({ values: [] });
-      const data = sheet.getRange(2, 1, lastRow - 1, 11).getValues();
+      const data = sheet.getRange(2, 1, lastRow - 1, 13).getValues();
       return respond_({ values: data.filter(function (row) { return row[0] !== ''; }) });
     }
 

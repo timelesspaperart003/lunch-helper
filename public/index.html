@@ -669,6 +669,7 @@
               onkeydown="if(event.key==='Enter') handleLogin()">
           </div>
           <button class="submit-btn" onclick="handleLogin()">登入</button>
+          <button class="add-btn" style="margin-top:10px" onclick="handleViewOnly()">👀 只查看（免密碼）</button>
         </div>
       </div>
 
@@ -683,7 +684,7 @@
         <div class="avatar" id="cal-av"></div>
         <div>
           <div class="user-name" id="cal-nm"></div>
-          <div class="user-label">打帳者</div>
+          <div class="user-label" id="cal-role-label">打帳者</div>
         </div>
       </div>
       <button class="logout-btn" onclick="doLogout()">登出</button>
@@ -883,7 +884,7 @@
     };
 
     /* 主名單欄位索引 (A=0) */
-    const C = { NAME:0, BALANCE:2, ROLE:5, WALLET:6, OVERDUE:7, PASSWORD:10 };
+    const C = { NAME:0, BALANCE:2, ROLE:5, WALLET:6, OVERDUE:7, PASSWORD:10, CAN_TOPUP:11, CAN_ORDER:12 };
 
     /* 金流紀錄表欄位索引 (A=0) */
     const F = { TITLE:0, NAME:1, TYPE:2, AMT:3, DELIVERY:4, CHANGE:5,
@@ -1020,6 +1021,7 @@
       applyTitleVisibility();
       g('cal-av').textContent = me.name[0];
       g('cal-nm').textContent = me.name;
+      g('cal-role-label').textContent = me.readOnly ? '只查看' : '打帳者';
       const now = new Date();
       calYear = now.getFullYear();
       calMonth = now.getMonth();
@@ -1161,6 +1163,7 @@
           return;
         }
 
+        const canEdit = me && me.canOrder;
         const item = mk('div', 'detail-item');
         const figs = `
           <div class="detail-figs">
@@ -1174,9 +1177,10 @@
             <div>
               <div class="detail-name">${name}</div>
             </div>
-            <button class="edit-mini-btn" onclick="toggleEdit('${cssName(name)}')">修改</button>
+            ${canEdit ? `<button class="edit-mini-btn" onclick="toggleEdit('${cssName(name)}')">修改</button>` : ''}
           </div>
           ${figs}
+          ${canEdit ? `
           <div class="edit-form" id="edit-${cssName(name)}">
             <label>修改後的實際扣款（元）</label>
             <div class="edit-form-row">
@@ -1185,7 +1189,7 @@
               <button class="edit-save-btn" onclick="saveCorrection('${jsName(name)}')">確認</button>
             </div>
             <div class="edit-delta" id="delta-${cssName(name)}"></div>
-          </div>`;
+          </div>` : ''}`;
         wrap.appendChild(item);
       });
     }
@@ -1207,6 +1211,7 @@
     }
 
     async function saveCorrection(name) {
+      if (!me || !me.canOrder) { alert('沒有修改權限'); return; }
       const o = activeOrder;
       const p = o.persons[name];
       const safe = cssName(name);
@@ -1261,6 +1266,7 @@
        儲值
     ============================================================ */
     function openTopup() {
+      if (!me || !me.canTopup) { alert('沒有儲值權限'); return; }
       const sel = g('topup-name');
       sel.innerHTML = '<option value="">請選擇姓名</option>';
       allNames.forEach(n => {
@@ -1280,6 +1286,7 @@
     }
 
     async function submitTopup() {
+      if (!me || !me.canTopup) { showE('err-topup', '沒有儲值權限'); return; }
       const name = g('topup-name').value;
       const date = g('topup-date').value || today();
       const amt  = parseFloat(g('topup-amt').value);
@@ -1380,14 +1387,15 @@
           // 本機測試：自動以第一個有密碼的打帳者登入，直接進行事曆
           const cashier = listData.find(r => r[C.NAME] && r[C.PASSWORD]) || listData[0];
           const name = cashier[C.NAME];
-          me = { name, rowNum: rowMap[name].rowNum, data: rowMap[name].data };
+          me = buildMe_(name, rowMap[name], false);
           enterCalendar();
           return;
         }
         const sel = g('login-name');
         sel.innerHTML = '<option value="">請選擇姓名</option>';
+        // 全部人都列出來（免密碼「只查看」用得到），有沒有密碼只影響「登入」按鈕能不能通過
         listData.forEach(r => {
-          if (r[C.NAME] && r[C.PASSWORD]) {
+          if (r[C.NAME]) {
             const o = document.createElement('option');
             o.value = o.textContent = r[C.NAME];
             sel.appendChild(o);
@@ -1400,6 +1408,20 @@
       }
     }
 
+    /* 是否有值(V/是/任何非空字串都算有權限)，用來讀「可儲值」「可輸入訂單」這兩欄 */
+    function truthy_(v) { return String(v || '').trim() !== ''; }
+
+    function buildMe_(name, entry, readOnly) {
+      return {
+        name,
+        rowNum: entry.rowNum,
+        data: entry.data,
+        readOnly: !!readOnly,
+        canTopup: !readOnly && truthy_(entry.data[C.CAN_TOPUP]),
+        canOrder: !readOnly && truthy_(entry.data[C.CAN_ORDER]),
+      };
+    }
+
     function handleLogin() {
       const name = g('login-name').value;
       const pwd  = g('login-pwd').value;
@@ -1410,15 +1432,27 @@
       /* 密碼欄若在試算表打成純數字，Google Sheet 會存成數字型別，
          這裡一律轉成字串比對，避免 '1234' !== 1234 導致誤判密碼錯誤 */
       const savedPwd = String(entry ? (entry.data[C.PASSWORD] || '') : '').trim();
-      if (!entry || String(pwd).trim() !== savedPwd) {
+      if (!entry || !savedPwd || String(pwd).trim() !== savedPwd) {
         showE('err-login', '姓名或密碼錯誤'); return;
       }
-      me = { name, rowNum: entry.rowNum, data: entry.data };
+      me = buildMe_(name, entry, false);
+      enterCalendar();
+    }
+
+    /* 沒有密碼也能用：選姓名直接進去看行事曆/自己的紀錄，不能儲值也不能輸入訂單 */
+    function handleViewOnly() {
+      const name = g('login-name').value;
+      hideE('err-login');
+      if (!name) { showE('err-login', '請選擇姓名'); return; }
+      const entry = rowMap[name];
+      if (!entry) { showE('err-login', '找不到這個人'); return; }
+      me = buildMe_(name, entry, true);
       enterCalendar();
     }
 
     /* 從行事曆右下角 ＋ 進入打帳單 */
     function openPayment() {
+      if (!me || !me.canOrder) { alert('沒有輸入訂單權限'); return; }
       goScreen(2);
       setupS2();
     }
@@ -1622,6 +1656,7 @@
        SUBMIT
     ============================================================ */
     async function handleSubmit() {
+      if (!me || !me.canOrder) { alert('沒有輸入訂單權限'); return; }
       const title = g('order-title').value.trim();
       if (!title)                        { alert('請填寫訂單標題'); return; }
       if (rows.some(r => !r.name))       { alert('有列尚未選擇姓名'); return; }
@@ -1744,8 +1779,9 @@
         if (!el) return;
         el.style.display = (String(i) === String(n)) ? (i === '1' ? 'flex' : 'block') : 'none';
       });
-      g('fab-add').style.display = (String(n) === 'cal') ? 'flex' : 'none';
-      g('fab-topup').style.display = (String(n) === 'cal') ? 'flex' : 'none';
+      const onCal = String(n) === 'cal';
+      g('fab-add').style.display = (onCal && me && me.canOrder) ? 'flex' : 'none';
+      g('fab-topup').style.display = (onCal && me && me.canTopup) ? 'flex' : 'none';
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 

@@ -9,7 +9,7 @@
 //        GEMINI_API_KEY = 你在 aistudio.google.com 申請的金鑰
 //   4. 上方函式下拉選單選 setupSpreadsheet，按執行（第一次會跳權限授權，
 //      同意即可）。執行完在「執行紀錄」會看到新試算表的網址，記下來，
-//      之後到那份試算表的「主名單表」手動建立初始名單（姓名 + 打帳者欄填密碼）
+//      之後到那份試算表的「主名單表」手動建立初始名單（姓名 + 登入密碼欄填密碼）
 //   5. 部署 > New deployment > Web App
 //        - Execute as: 我 (Me)
 //        - Who has access: 任何人 (Anyone)
@@ -44,7 +44,7 @@ function setupSpreadsheet() {
   main.setName(MAIN_TAB);
   main.getRange(1, 1, 1, 11).setValues([[
     '姓名', 'LINE_ID', '餘額', '上次通知日', '註冊時間', '角色',
-    '共用錢包歸戶', '低額逾期狀態', '低額開始日', '最近提醒日', '打帳者'
+    '共用錢包歸戶', '低額逾期狀態', '低額開始日', '最近提醒日', '登入密碼'
   ]]);
 
   const flow = ss.insertSheet(FLOW_TAB);
@@ -55,7 +55,7 @@ function setupSpreadsheet() {
 
   props.setProperty('SS_ID', ss.getId());
   Logger.log('新試算表已建立：' + ss.getUrl());
-  Logger.log('接下來請到「主名單表」手動建立初始名單（姓名 + 打帳者欄填密碼，密碼欄填了才能登入/當打帳者）');
+  Logger.log('接下來請到「主名單表」手動建立初始名單（姓名 + 登入密碼欄填密碼，填了密碼才能登入）');
 }
 
 function doGet(e) {

@@ -183,18 +183,28 @@ function parseUberOrder_(images, nameMap) {
 
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL +
     ':generateContent?key=' + encodeURIComponent(apiKey);
-  const resp = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    muteHttpExceptions: true,
-    payload: JSON.stringify({
-      contents: [{ parts: parts }],
-      generationConfig: { responseMimeType: 'application/json' }
-    })
+  const payload = JSON.stringify({
+    contents: [{ parts: parts }],
+    generationConfig: { responseMimeType: 'application/json' }
   });
 
-  if (resp.getResponseCode() !== 200) {
-    return { ok: false, error: 'Gemini 呼叫失敗 (' + resp.getResponseCode() + ')：' + resp.getContentText().slice(0, 300) };
+  // 503(伺服器忙)/429(超過速率限制) 是暫時性問題，重試幾次通常就過了，不用讓使用者手動重截圖
+  let resp;
+  const retryDelays = [1500, 3000, 6000];
+  for (let attempt = 0; ; attempt++) {
+    resp = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      muteHttpExceptions: true,
+      payload: payload
+    });
+    const code = resp.getResponseCode();
+    if (code === 200) break;
+    const retryable = (code === 503 || code === 429) && attempt < retryDelays.length;
+    if (!retryable) {
+      return { ok: false, error: 'Gemini 呼叫失敗 (' + code + ')：' + resp.getContentText().slice(0, 300) };
+    }
+    Utilities.sleep(retryDelays[attempt]);
   }
 
   var parsed;

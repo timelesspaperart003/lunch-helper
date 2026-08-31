@@ -272,6 +272,10 @@ function doPost(e) {
       const ss = getSS_();
       return respond_(parseUberOrder_(body.images || [], getNameMap_(ss)));
     }
+    if (body.action === 'parseTextOrder') {
+      const ss = getSS_();
+      return respond_(parseTextOrder_(body.text || '', getNameMap_(ss)));
+    }
     return respond_({ ok: false, error: 'unknown action: ' + body.action });
   } catch (err) {
     return respond_({ ok: false, error: err.message });
@@ -299,24 +303,17 @@ function saveScreenshotsToDrive_(images) {
   }
 }
 
-function parseUberOrder_(images, nameMap) {
+const ORDER_JSON_SCHEMA_HINT =
+  '用以下 JSON 格式回答，不要加任何其他文字或說明：' +
+  '{"subtotal":0,"deliveryFee":0,"serviceFee":0,"discount":0,"total":0,' +
+  '"people":[{"name":"","amt":0}]}';
+
+// 呼叫 Gemini 把 parts(文字提示+圖片，或純文字)解析成訂單結構化資料。
+// 回傳 { ok, delivery, discount, people:[{ubName,amt,mappedName}], receipt } 或 { ok:false, error }。
+// 圖片辨識(parseUberOrder_)、文字訂單辨識(parseTextOrder_)共用這個函式，只是 parts 內容不同。
+function callGeminiForOrder_(parts, nameMap) {
   const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!apiKey) return { ok: false, error: 'GEMINI_API_KEY 尚未設定（去 Script Properties 加一組）' };
-  if (!images.length) return { ok: false, error: '沒有收到圖片' };
-
-  const parts = [{
-    text: '這是 Uber Eats 團體訂購「結帳」畫面的截圖（可能有多張，是同一筆訂單滑動後的不同段落）。' +
-      '請讀出每個人的姓名，以及他點的品項金額加總（同一人有多個品項就加總成一個數字）。' +
-      '同時讀出整筆訂單的：小計 subtotal、外送費 deliveryFee、服務費/費用 serviceFee、' +
-      '折扣（例如 Uber One 點數折扣）discount、總計 total —— 這些金額都要是「實際折扣後」的數字，' +
-      '不要用被劃掉的原價。只回報你在截圖中能清楚讀到的資料，看不到的欄位填 0，不要自己編造姓名或金額。' +
-      '用以下 JSON 格式回答，不要加任何其他文字或說明：' +
-      '{"subtotal":0,"deliveryFee":0,"serviceFee":0,"discount":0,"total":0,' +
-      '"people":[{"name":"","amt":0}]}'
-  }];
-  images.forEach(function (img) {
-    parts.push({ inline_data: { mime_type: img.mimeType, data: img.data } });
-  });
 
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL +
     ':generateContent?key=' + encodeURIComponent(apiKey);
@@ -325,7 +322,7 @@ function parseUberOrder_(images, nameMap) {
     generationConfig: { responseMimeType: 'application/json' }
   });
 
-  // 503(伺服器忙)/429(超過速率限制) 是暫時性問題，重試幾次通常就過了，不用讓使用者手動重截圖
+  // 503(伺服器忙)/429(超過速率限制) 是暫時性問題，重試幾次通常就過了，不用讓使用者手動重試
   let resp;
   const retryDelays = [1500, 3000, 6000];
   for (let attempt = 0; ; attempt++) {
@@ -350,7 +347,7 @@ function parseUberOrder_(images, nameMap) {
     const text = data.candidates[0].content.parts[0].text;
     parsed = JSON.parse(text);
   } catch (e) {
-    return { ok: false, error: '辨識結果解析失敗，請重新截圖再試一次' };
+    return { ok: false, error: '辨識結果解析失敗，請重新試一次' };
   }
 
   const delivery = round2_((parsed.deliveryFee || 0) + (parsed.serviceFee || 0));
@@ -365,16 +362,56 @@ function parseUberOrder_(images, nameMap) {
       };
     });
 
-  const screenshotLinks = saveScreenshotsToDrive_(images);
-
   return {
     ok: true,
     delivery: delivery,
     discount: discount,
     people: people,
-    receipt: { subtotal: parsed.subtotal || 0, total: parsed.total || 0 },
-    screenshotLink: screenshotLinks.join(', ')
+    receipt: { subtotal: parsed.subtotal || 0, total: parsed.total || 0 }
   };
+}
+
+function parseUberOrder_(images, nameMap) {
+  if (!images.length) return { ok: false, error: '沒有收到圖片' };
+
+  const parts = [{
+    text: '這是 Uber Eats 團體訂購「結帳」畫面的截圖（可能有多張，是同一筆訂單滑動後的不同段落）。' +
+      '請讀出每個人的姓名，以及他點的品項金額加總（同一人有多個品項就加總成一個數字）。' +
+      '同時讀出整筆訂單的：小計 subtotal、外送費 deliveryFee、服務費/費用 serviceFee、' +
+      '折扣（例如 Uber One 點數折扣）discount、總計 total —— 這些金額都要是「實際折扣後」的數字，' +
+      '不要用被劃掉的原價。只回報你在截圖中能清楚讀到的資料，看不到的欄位填 0，不要自己編造姓名或金額。' +
+      ORDER_JSON_SCHEMA_HINT
+  }];
+  images.forEach(function (img) {
+    parts.push({ inline_data: { mime_type: img.mimeType, data: img.data } });
+  });
+
+  const result = callGeminiForOrder_(parts, nameMap);
+  if (!result.ok) return result;
+
+  const screenshotLinks = saveScreenshotsToDrive_(images);
+  result.screenshotLink = screenshotLinks.join(', ');
+  return result;
+}
+
+// 解析像 LINE 群組貼的文字飲料/餐點訂單，例如：
+//   小妤：紅宣烏龍微微$35
+//   鴨子：波霸紅茶拿鐵一分糖微冰$65
+// 每行「姓名 + 品項/備註 + 金額」，格式不完全一致(冒號全半形、有無空白、$在前後)都交給 Gemini 判斷，
+// 不用自己寫正則表達式硬猜格式。
+function parseTextOrder_(text, nameMap) {
+  if (!text || !text.trim()) return { ok: false, error: '沒有收到文字內容' };
+
+  const parts = [{
+    text: '這是同事在 LINE 群組貼的文字訂單，通常一行一個人，格式類似「姓名：品項備註$金額」' +
+      '（冒號可能是全形或半形、金額符號$可能在前面或後面、也可能沒有$符號，品項與備註可以忽略，只要金額）。' +
+      '請讀出每個人的姓名和他要付的金額。這種文字訂單通常沒有外送費/折扣，deliveryFee/discount/serviceFee 都填 0 即可，' +
+      'subtotal/total 填全部人的金額加總。只回報看得懂的資料，看不懂的欄位或行就跳過，不要自己編造姓名或金額。' +
+      ORDER_JSON_SCHEMA_HINT +
+      '\n\n以下是要解析的文字：\n' + text
+  }];
+
+  return callGeminiForOrder_(parts, nameMap);
 }
 
 function round2_(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; }

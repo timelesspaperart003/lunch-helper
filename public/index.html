@@ -799,6 +799,14 @@
 
       <input type="file" id="uber-file-input" accept="image/*" multiple style="display:none" onchange="handleUberFiles(this.files)">
       <button class="add-btn import-btn" onclick="g('uber-file-input').click()">📷 從 Uber Eats 截圖匯入</button>
+      <button class="add-btn import-btn" onclick="toggleTextOrderBox()">📝 貼文字訂單（LINE留言）</button>
+
+      <div id="text-order-box" style="display:none; margin-bottom:10px;">
+        <textarea id="text-order-input" rows="6" placeholder="貼上像這樣的文字：&#10;小妤：紅宣烏龍微微$35&#10;鴨子：波霸紅茶拿鐵一分糖微冰$65"
+          style="width:100%; padding:12px 16px; border:1.5px solid var(--border); border-radius:20px; font-family:'Nunito',sans-serif; font-size:14px; resize:vertical;"></textarea>
+        <button class="submit-btn" style="height:44px; margin-top:8px;" onclick="handleTextOrder()">解析文字訂單</button>
+      </div>
+
       <div class="import-hint" id="import-hint" style="display:none"></div>
 
       <div id="person-list"></div>
@@ -1654,6 +1662,37 @@
       } catch (e) {
         hint.className = 'import-hint warn';
         hint.textContent = '匯入失敗：' + e.message + '（可以重新截圖再試一次，或直接手動輸入）';
+      }
+    }
+
+    function toggleTextOrderBox() {
+      const box = g('text-order-box');
+      box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function handleTextOrder() {
+      const text = g('text-order-input').value.trim();
+      if (!text) { alert('請先貼上文字訂單內容'); return; }
+
+      const hint = g('import-hint');
+      hint.className = 'import-hint';
+      hint.style.display = 'block';
+      hint.textContent = '辨識中...';
+
+      try {
+        const r = await fetch('/api/parse-text', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || '辨識失敗');
+        applyUberImport(d);
+        g('text-order-input').value = '';
+        g('text-order-box').style.display = 'none';
+      } catch (e) {
+        hint.className = 'import-hint warn';
+        hint.textContent = '解析失敗：' + e.message + '（可以修改文字再試一次，或直接手動輸入）';
       }
     }
 

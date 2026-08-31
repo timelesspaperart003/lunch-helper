@@ -11,6 +11,7 @@ export default {
     if (method === "OPTIONS") return corsResponse();
 
     if (path === "/api/parse" && method === "POST") return handleParse(request, env);
+    if (path === "/api/parse-text" && method === "POST") return handleParseText(request, env);
 
     return env.ASSETS.fetch(request);
   }
@@ -28,6 +29,22 @@ async function handleParse(request, env) {
   const gasResult = await postToGASReal(env.GAS_URL, {
     action: "parseUberOrder",
     images: body.images
+  });
+  return jsonResp(gasResult, gasResult.ok === false ? 502 : 200);
+}
+
+async function handleParseText(request, env) {
+  let body;
+  try { body = await request.json(); }
+  catch (e) { return jsonResp({ ok: false, error: "INVALID_BODY" }, 400); }
+
+  if (!body.text || !body.text.trim()) {
+    return jsonResp({ ok: false, error: "NO_TEXT" }, 400);
+  }
+
+  const gasResult = await postToGASReal(env.GAS_URL, {
+    action: "parseTextOrder",
+    text: body.text
   });
   return jsonResp(gasResult, gasResult.ok === false ? 502 : 200);
 }

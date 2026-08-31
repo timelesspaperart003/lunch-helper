@@ -62,61 +62,84 @@ function setupSpreadsheet() {
 // 同事那套系統的 GAS 網址，只用來「讀」他的名單，不會寫回去
 const COLLEAGUE_GAS_URL = 'https://script.google.com/macros/s/AKfycbxHHqoEIBDI7YvlJk5kqvKUeE49j2fODvvYd8xZlqn1szll2mw546bJ4UBgU51nv4-0pg/exec';
 
-// 一次性：把同事那套系統的名單（姓名/LINE_ID/餘額/角色/共用錢包歸戶）讀進來，
-// 寫進「自己這份」試算表的主名單表。只呼叫同事 GAS 的 getList（唯讀），完全不會寫回同事那邊。
-// 密碼欄故意留空，不從同事那邊帶密碼過來——兩邊系統獨立，登入密碼分開設定比較安全。
-// 已經存在於自己主名單表的姓名會略過，不覆蓋，保護已經在新系統裡動過的資料。
-// 在 Apps Script 編輯器手動執行一次即可。
+// 一次性：從同事那套系統匯入資料到「自己這份」試算表。只呼叫同事 GAS 的 getList/getFlow（唯讀），
+// 完全不會寫回同事那邊。在 Apps Script 編輯器手動執行一次即可。
+//   1. 主名單表：同事有、自己沒有的人 → 新增；名字已經存在的人 → 只更新餘額(密碼/其他欄位不動)。
+//      這部分可以重複執行，每次都會把餘額同步成同事那邊最新的數字。
+//   2. 金流紀錄表：把同事的消費/儲值歷史記錄整批複製過來，讓行事曆看得到過去的紀錄。
+//      這部分只在自己的金流紀錄表還是空的時候做一次，避免重複執行造成同一筆紀錄被複製兩份。
 function importFromColleague() {
-  const resp = UrlFetchApp.fetch(COLLEAGUE_GAS_URL + '?action=getList', { muteHttpExceptions: true });
-  if (resp.getResponseCode() !== 200) {
-    Logger.log('讀取同事名單失敗：HTTP ' + resp.getResponseCode() + '：' + resp.getContentText().slice(0, 300));
+  const ss = getSS_();
+
+  // ---- 1. 主名單表：新增缺的人、同步已存在的人的餘額 ----
+  const listResp = UrlFetchApp.fetch(COLLEAGUE_GAS_URL + '?action=getList', { muteHttpExceptions: true });
+  if (listResp.getResponseCode() !== 200) {
+    Logger.log('讀取同事名單失敗：HTTP ' + listResp.getResponseCode() + '：' + listResp.getContentText().slice(0, 300));
     return;
   }
+  var listData;
+  try { listData = JSON.parse(listResp.getContentText()); }
+  catch (e) { Logger.log('同事名單回傳的內容不是合法 JSON：' + listResp.getContentText().slice(0, 300)); return; }
+  const colRows = listData.values || [];
 
-  var data;
-  try { data = JSON.parse(resp.getContentText()); }
-  catch (e) { Logger.log('同事那邊回傳的內容不是合法 JSON：' + resp.getContentText().slice(0, 300)); return; }
-
-  const rows = data.values || [];
-  if (!rows.length) { Logger.log('同事那邊沒有讀到任何名單資料'); return; }
-
-  const ss = getSS_();
-  const sheet = ss.getSheetByName(MAIN_TAB);
-  const existingNames = {};
-  const lastRow = sheet.getLastRow();
-  if (lastRow >= 2) {
-    sheet.getRange(2, 1, lastRow - 1, 1).getValues().forEach(function (r) {
-      if (r[0]) existingNames[r[0]] = true;
+  const mainSheet = ss.getSheetByName(MAIN_TAB);
+  const lastMainRow = mainSheet.getLastRow();
+  const existingRowByName = {}; // 姓名 → 在自己主名單表的實際列號
+  if (lastMainRow >= 2) {
+    mainSheet.getRange(2, 1, lastMainRow - 1, 1).getValues().forEach(function (r, i) {
+      if (r[0]) existingRowByName[r[0]] = i + 2;
     });
   }
 
   const toAdd = [];
-  let skipped = 0;
-  rows.forEach(function (r) {
+  let added = 0, updated = 0;
+  colRows.forEach(function (r) {
     const name = r[0];
     if (!name) return;
-    if (existingNames[name]) { skipped++; return; }
-    toAdd.push([
-      name,        // 姓名
-      r[1] || '',  // LINE_ID
-      r[2] || 0,   // 餘額（用同事那邊目前的餘額當起點）
-      '',          // 上次通知日
-      '',          // 註冊時間
-      r[5] || '',  // 角色
-      r[6] || '',  // 共用錢包歸戶
-      '',          // 低額逾期狀態
-      '',          // 低額開始日
-      '',          // 最近提醒日
-      ''           // 登入密碼（不匯入，留空，要登入的人自己另外設定）
-    ]);
+    const existRow = existingRowByName[name];
+    if (existRow) {
+      mainSheet.getRange(existRow, 3).setValue(r[2] || 0); // 只同步餘額，密碼欄等其他欄位不動
+      updated++;
+    } else {
+      toAdd.push([
+        name, r[1] || '', r[2] || 0, '', '', r[5] || '', r[6] || '', '', '', '', ''
+        // 姓名/LINE_ID/餘額/(上次通知日空)/(註冊時間空)/角色/共用錢包歸戶/(低額逾期狀態空)/(低額開始日空)/(最近提醒日空)/登入密碼(不匯入，留空)
+      ]);
+      added++;
+    }
   });
-
   if (toAdd.length) {
-    sheet.getRange(sheet.getLastRow() + 1, 1, toAdd.length, 11).setValues(toAdd);
+    mainSheet.getRange(mainSheet.getLastRow() + 1, 1, toAdd.length, 11).setValues(toAdd);
   }
-  Logger.log('匯入完成：新增 ' + toAdd.length + ' 人、略過 ' + skipped + ' 人（已存在於主名單表)。' +
-    '密碼欄都是空的，要登入這個新系統的人請自行到主名單表設定密碼。');
+  Logger.log('主名單表：新增 ' + added + ' 人、同步餘額 ' + updated + ' 人。密碼欄不會從同事那邊帶過來，要登入的人請自行設定密碼。');
+
+  // ---- 2. 金流紀錄表：只在自己這邊還是空的時候整批匯入，避免重複匯入 ----
+  const flowSheet = ss.getSheetByName(FLOW_TAB);
+  if (flowSheet.getLastRow() >= 2) {
+    Logger.log('金流紀錄表已經有資料了，這次不會再匯入同事的消費/儲值歷史（避免重複）。' +
+      '如果真的要重新匯入，請先手動清空金流紀錄表內容（保留表頭）再重新執行這個函式。');
+    return;
+  }
+
+  const flowResp = UrlFetchApp.fetch(COLLEAGUE_GAS_URL + '?action=getFlow', { muteHttpExceptions: true });
+  if (flowResp.getResponseCode() !== 200) {
+    Logger.log('讀取同事消費紀錄失敗：HTTP ' + flowResp.getResponseCode() + '：' + flowResp.getContentText().slice(0, 300));
+    return;
+  }
+  var flowData;
+  try { flowData = JSON.parse(flowResp.getContentText()); }
+  catch (e) { Logger.log('同事消費紀錄回傳的內容不是合法 JSON：' + flowResp.getContentText().slice(0, 300)); return; }
+  const flowRows = flowData.values || [];
+  if (!flowRows.length) { Logger.log('同事那邊沒有消費/儲值紀錄可以匯入'); return; }
+
+  // 同事 getFlow 回的是顯示文字(getDisplayValues)，補齊/裁到 13 欄避免欄數不一致寫入失敗
+  const normalized = flowRows.map(function (r) {
+    const row = r.slice(0, 13);
+    while (row.length < 13) row.push('');
+    return row;
+  });
+  flowSheet.getRange(flowSheet.getLastRow() + 1, 1, normalized.length, 13).setValues(normalized);
+  Logger.log('金流紀錄表：匯入了同事那邊 ' + normalized.length + ' 筆歷史消費/儲值紀錄。');
 }
 
 function cleanName_(s) {

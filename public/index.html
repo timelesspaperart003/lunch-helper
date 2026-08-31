@@ -1,0 +1,1673 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>午餐錢小幫手</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:          #FDFCF8;
+      --fg:          #2C2C24;
+      --primary:     #5D7052;
+      --primary-fg:  #F3F4F1;
+      --secondary:   #C18C5D;
+      --accent:      #E6DCCD;
+      --accent-fg:   #4A4A40;
+      --muted:       #F0EBE5;
+      --muted-fg:    #78786C;
+      --border:      #DED8CF;
+      --destructive: #A85448;
+      --card:        #FEFEFA;
+      --sh-soft:  0 4px 20px -2px rgba(93,112,82,.15);
+      --sh-float: 0 10px 40px -10px rgba(193,140,93,.22);
+      --sh-deep:  0 20px 40px -10px rgba(93,112,82,.18);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: 'Nunito', sans-serif;
+      font-size: 16px;
+      line-height: 1.55;
+      min-height: 100vh;
+    }
+
+    /* --- grain texture --- */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 1;
+      opacity: .035; mix-blend-mode: multiply;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.8'/></svg>");
+    }
+
+    /* --- background blobs --- */
+    .bg-blobs { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+    .blob { position: absolute; filter: blur(80px); opacity: .28; animation: bfloat 9s ease-in-out infinite; }
+    .blob-1 {
+      width: 520px; height: 520px; background: #5D7052;
+      border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+      top: -170px; left: -150px;
+    }
+    .blob-2 {
+      width: 440px; height: 440px; background: #C18C5D;
+      border-radius: 40% 60% 70% 30% / 50% 60% 40% 50%;
+      bottom: -150px; right: -130px; opacity: .18;
+      animation-delay: -3.5s;
+    }
+    .blob-3 {
+      width: 300px; height: 300px; background: #E6DCCD;
+      border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+      top: 44%; right: -60px; opacity: .38;
+      animation-delay: -6s;
+    }
+    @keyframes bfloat {
+      0%,100% { transform: translateY(0) scale(1); }
+      50%      { transform: translateY(-22px) scale(1.025); }
+    }
+
+    h1, h2, h3, h4 {
+      font-family: 'Fraunces', serif;
+      letter-spacing: -.015em;
+    }
+
+    /* ======================================
+       SCREEN CONTAINER
+    ====================================== */
+    .screen { position: relative; z-index: 2; }
+
+    /* ======================================
+       SCREEN 1 — LOGIN
+    ====================================== */
+    #screen-1 {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 32px 20px;
+    }
+
+    .login-wrap { width: 100%; max-width: 400px; }
+
+    .login-card {
+      background: var(--card);
+      border: 1px solid rgba(222,216,207,.6);
+      border-radius: 48px 32px 48px 32px;
+      padding: 52px 40px 44px;
+      box-shadow: var(--sh-float);
+      text-align: center;
+      animation: cardin .5s ease both;
+    }
+
+    @keyframes cardin {
+      from { opacity: 0; transform: translateY(28px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .login-logo-wrap { display: flex; justify-content: center; margin-bottom: 26px; }
+    .login-logo {
+      width: 90px; height: 90px;
+      background: var(--primary);
+      border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 42px;
+      box-shadow: var(--sh-soft);
+      animation: logofloat 4s ease-in-out infinite;
+    }
+    @keyframes logofloat {
+      0%,100% { transform: translateY(0) rotate(-2deg); }
+      50%      { transform: translateY(-9px) rotate(2deg); }
+    }
+
+    .login-title { font-size: 30px; font-weight: 700; margin-bottom: 8px; }
+    .login-sub   { color: var(--muted-fg); font-size: 14px; margin-bottom: 30px; }
+    .login-card .field { text-align: left; }
+
+    /* ======================================
+       TOP BAR (screens 2 & 3)
+    ====================================== */
+    .top-bar {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 13px 22px;
+      background: rgba(255,255,255,.72);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(222,216,207,.5);
+      border-radius: 999px;
+      box-shadow: var(--sh-soft);
+      margin-bottom: 26px;
+    }
+    .user-info { display: flex; align-items: center; gap: 11px; }
+    .avatar {
+      width: 40px; height: 40px;
+      background: var(--primary); color: var(--primary-fg);
+      border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Fraunces', serif; font-weight: 700; font-size: 17px;
+    }
+    .user-name  { font-weight: 700; font-size: 15px; line-height: 1.2; }
+    .user-label { font-size: 12px; color: var(--muted-fg); }
+
+    /* ======================================
+       SCREEN 2 & 3 — LAYOUT
+    ====================================== */
+    #screen-2, #screen-3 {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 24px 20px 88px;
+    }
+
+    /* ======================================
+       CARDS
+    ====================================== */
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(222,216,207,.55);
+      padding: 26px 28px;
+      box-shadow: var(--sh-soft);
+      margin-bottom: 18px;
+      animation: cardin .4s ease both;
+    }
+    .card-a { border-radius: 32px 32px 32px 52px; }
+    .card-b { border-radius: 52px 32px 32px 32px; }
+    .card-r { border-radius: 36px; }
+    .card:nth-child(2) { animation-delay: .07s; }
+    .card:nth-child(3) { animation-delay: .14s; }
+
+    .card-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 20px;
+    }
+    .card-icon {
+      width: 38px; height: 38px;
+      background: var(--accent); color: var(--accent-fg);
+      border-radius: 55% 45% 60% 40% / 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .card-header h2 { font-size: 19px; font-weight: 700; }
+
+    /* ======================================
+       FORM FIELDS
+    ====================================== */
+    .field { margin-bottom: 14px; }
+    .field-row { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; }
+
+    label {
+      display: block;
+      font-weight: 700; font-size: 11px;
+      color: var(--muted-fg);
+      margin-bottom: 6px; margin-left: 16px;
+      letter-spacing: .06em; text-transform: uppercase;
+    }
+
+    input[type=text],
+    input[type=number],
+    input[type=date],
+    input[type=password],
+    select {
+      width: 100%; height: 48px;
+      padding: 0 18px;
+      background: rgba(255,255,255,.65);
+      border: 1.5px solid var(--border);
+      border-radius: 999px;
+      font-family: 'Nunito', sans-serif; font-size: 15px;
+      color: var(--fg);
+      transition: border-color .2s, box-shadow .2s, background .2s;
+      appearance: none; -webkit-appearance: none;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 4px rgba(93,112,82,.13);
+      background: #fff;
+    }
+    input::placeholder { color: #b8b4aa; }
+
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235D7052' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      background-color: rgba(255,255,255,.65);
+      padding-right: 42px;
+    }
+    select:focus { background-color: #fff; }
+
+    /* ======================================
+       PERSON ROWS (Screen 2 Block B)
+    ====================================== */
+    .person-row {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr auto;
+      gap: 8px; align-items: center;
+      padding: 9px;
+      background: rgba(253,252,248,.92);
+      border: 1.5px solid rgba(222,216,207,.65);
+      border-radius: 999px;
+      margin-bottom: 6px;
+      transition: border-color .2s, background .2s;
+    }
+    .person-row:hover { border-color: rgba(93,112,82,.32); background: #fff; }
+    .person-row select,
+    .person-row input[type=number] {
+      height: 38px; font-size: 14px;
+      padding: 0 13px; border-color: transparent;
+      background: white; box-shadow: none;
+    }
+    .person-row select { padding-right: 34px; background-position: right 11px center; }
+    .person-row select:focus,
+    .person-row input[type=number]:focus { border-color: var(--primary); }
+
+    .del-btn {
+      width: 36px; height: 36px;
+      background: rgba(168,84,72,.1);
+      border: none; color: var(--destructive);
+      border-radius: 50%; cursor: pointer; font-size: 14px;
+      flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+      transition: background .2s, transform .2s;
+    }
+    .del-btn:hover { background: var(--destructive); color: #fff; transform: rotate(90deg); }
+
+    .preview-chip {
+      font-size: 13px; color: var(--muted-fg);
+      padding: 2px 0 10px 20px;
+      display: block; min-height: 24px;
+    }
+    .preview-chip strong {
+      font-family: 'Fraunces', serif;
+      color: var(--primary); font-size: 15px; font-weight: 700;
+    }
+
+    /* ======================================
+       SUMMARY CARD
+    ====================================== */
+    .summary-card {
+      background: linear-gradient(135deg, rgba(93,112,82,.07) 0%, rgba(193,140,93,.07) 100%);
+      border: 1.5px solid rgba(93,112,82,.2);
+      border-radius: 32px; padding: 22px 26px;
+      margin-bottom: 18px;
+      animation: cardin .4s .22s ease both;
+    }
+    .summary-card h3 {
+      font-size: 16px; font-weight: 700;
+      margin-bottom: 14px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .sum-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 9px 0;
+      border-bottom: 1px dashed rgba(222,216,207,.7);
+    }
+    .sum-row:last-child { border-bottom: none; }
+    .sum-label { font-size: 14px; color: var(--muted-fg); }
+    .sum-val { font-family: 'Fraunces', serif; font-weight: 700; font-size: 19px; }
+    .sum-val.hi { color: var(--primary); font-size: 24px; }
+
+    /* ======================================
+       BUTTONS
+    ====================================== */
+    .submit-btn {
+      display: block; width: 100%; height: 58px;
+      background: var(--primary); color: var(--primary-fg);
+      border: none; border-radius: 999px;
+      font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 16px;
+      letter-spacing: .025em; cursor: pointer;
+      box-shadow: var(--sh-soft);
+      transition: transform .3s, box-shadow .3s;
+      animation: cardin .4s .3s ease both;
+    }
+    .submit-btn:hover:not(:disabled) { transform: scale(1.02) translateY(-2px); box-shadow: var(--sh-deep); }
+    .submit-btn:active:not(:disabled) { transform: scale(.98); }
+    .submit-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    .add-btn {
+      width: 100%; background: transparent;
+      border: 2px dashed var(--secondary); color: var(--secondary);
+      padding: 12px; border-radius: 999px;
+      font-family: 'Nunito', sans-serif; font-weight: 700; font-size: 14px;
+      cursor: pointer; transition: all .25s; margin-top: 8px;
+    }
+    .add-btn:hover { background: rgba(193,140,93,.08); border-style: solid; }
+
+    .import-btn {
+      border-color: var(--primary); color: var(--primary);
+      margin-bottom: 10px;
+    }
+    .import-btn:hover { background: rgba(93,112,82,.08); }
+    .import-btn:disabled { opacity: .55; cursor: not-allowed; }
+    .import-hint {
+      font-size: 13px; color: var(--muted-fg);
+      background: rgba(93,112,82,.06);
+      border: 1px solid rgba(93,112,82,.15);
+      border-radius: 16px; padding: 10px 14px;
+      margin-bottom: 10px; line-height: 1.6;
+    }
+    .import-hint.warn { color: var(--destructive); background: rgba(168,84,72,.08); border-color: rgba(168,84,72,.25); }
+
+    .logout-btn {
+      background: transparent;
+      border: 2px solid var(--secondary); color: var(--secondary);
+      padding: 8px 18px; border-radius: 999px;
+      font-family: 'Nunito', sans-serif; font-weight: 700; font-size: 13px;
+      cursor: pointer; transition: all .25s;
+    }
+    .logout-btn:hover { background: var(--secondary); color: #fff; }
+
+    /* ======================================
+       ERROR MESSAGE
+    ====================================== */
+    .err-msg {
+      background: rgba(168,84,72,.09);
+      border: 1.5px solid rgba(168,84,72,.28);
+      border-radius: 20px; padding: 11px 16px;
+      color: var(--destructive);
+      font-size: 14px; font-weight: 600;
+      margin-bottom: 14px; text-align: center;
+    }
+
+    /* ======================================
+       RESULTS (Screen 3)
+    ====================================== */
+    .result-item {
+      padding: 16px 18px;
+      background: rgba(93,112,82,.05);
+      border: 1px solid rgba(93,112,82,.13);
+      border-radius: 22px; margin-bottom: 10px;
+    }
+    .result-item:last-child { margin-bottom: 0; }
+    .result-name {
+      font-family: 'Fraunces', serif; font-weight: 700;
+      font-size: 17px; margin-bottom: 7px;
+    }
+    .result-row {
+      display: flex; flex-wrap: wrap; gap: 14px;
+      font-size: 14px; color: var(--muted-fg);
+    }
+    .result-row span strong { color: var(--fg); }
+    .result-bal strong { color: var(--primary) !important; }
+
+    /* ======================================
+       SCREEN CAL — CALENDAR
+    ====================================== */
+    #screen-cal {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 24px 16px 96px;
+    }
+
+    .cal-card {
+      background: var(--card);
+      border: 1px solid rgba(222,216,207,.55);
+      border-radius: 36px;
+      padding: 20px 18px 22px;
+      box-shadow: var(--sh-soft);
+      animation: cardin .4s ease both;
+    }
+
+    .cal-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px; padding: 0 4px;
+    }
+    .cal-nav-left { display: flex; align-items: center; gap: 12px; }
+    .cal-month-label {
+      font-family: 'Fraunces', serif; font-weight: 700;
+      font-size: 22px; letter-spacing: -.01em;
+    }
+    .cal-arrow {
+      width: 38px; height: 38px; flex-shrink: 0;
+      background: var(--muted); color: var(--accent-fg);
+      border: none; border-radius: 50%;
+      font-size: 18px; cursor: pointer; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s, transform .2s;
+    }
+    .cal-arrow:hover { background: var(--accent); transform: scale(1.06); }
+    .cal-arrow:active { transform: scale(.92); }
+
+    .cal-tools { display: flex; align-items: center; gap: 8px; }
+    .cal-today-btn {
+      background: transparent; border: 1.5px solid var(--border);
+      color: var(--muted-fg); border-radius: 999px;
+      padding: 7px 14px; font-family: 'Nunito', sans-serif;
+      font-weight: 700; font-size: 12px; cursor: pointer;
+      transition: all .2s;
+    }
+    .cal-today-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .cal-toggle {
+      width: 38px; height: 38px; flex-shrink: 0;
+      background: var(--muted); border: none; color: var(--accent-fg);
+      border-radius: 50%; font-size: 17px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s;
+    }
+    .cal-toggle:hover { background: var(--accent); }
+    .cal-toggle.active { background: var(--primary); color: var(--primary-fg); }
+    .cal-toggle svg { width: 18px; height: 18px; display: block; }
+
+    .cal-weekdays {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      margin-bottom: 6px;
+    }
+    .cal-weekday {
+      text-align: center; font-size: 11px; font-weight: 700;
+      color: var(--muted-fg); letter-spacing: .05em;
+      padding: 4px 0;
+    }
+    .cal-weekday.wend { color: var(--secondary); }
+
+    .cal-grid {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      gap: 3px;
+    }
+    .cal-cell {
+      min-height: 76px;
+      border-radius: 14px;
+      padding: 4px 3px 3px;
+      background: rgba(240,235,229,.35);
+      border: 1px solid transparent;
+      display: flex; flex-direction: column; gap: 3px;
+      overflow: hidden;
+    }
+    .cal-cell-empty { background: transparent; }
+    .cal-cell.has-orders { background: rgba(253,252,248,.9); border-color: rgba(222,216,207,.6); }
+    .cal-day-num {
+      font-family: 'Fraunces', serif; font-weight: 600;
+      font-size: 13px; color: var(--fg);
+      width: 24px; height: 24px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%; line-height: 1;
+    }
+    .cal-cell.is-today .cal-day-num { background: var(--primary); color: var(--primary-fg); }
+
+    .cal-events { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .cal-event {
+      display: block; width: 100%; text-align: left;
+      background: var(--primary); color: var(--primary-fg);
+      border: none; border-radius: 6px;
+      font-family: 'Nunito', sans-serif; font-weight: 600; font-size: 11px;
+      line-height: 1.3; padding: 2px 6px; cursor: pointer;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      transition: filter .15s, transform .15s;
+    }
+    .cal-event:nth-child(2n) { background: var(--secondary); }
+    .cal-event:hover { filter: brightness(1.08); transform: translateX(1px); }
+    .cal-dot { display: none; }
+
+    /* 隱藏標題模式：只留色條，不顯示文字 */
+    #screen-cal.hide-titles .cal-event {
+      color: transparent; font-size: 0; padding: 0; height: 8px; border-radius: 999px;
+    }
+
+    .cal-empty-hint {
+      text-align: center; color: var(--muted-fg);
+      font-size: 13px; padding: 18px 0 2px;
+    }
+
+    /* ======================================
+       FAB（右下角新增）
+    ====================================== */
+    .fab {
+      position: fixed; right: 22px; bottom: 24px; z-index: 60;
+      width: 62px; height: 62px; border-radius: 50%;
+      background: var(--primary); color: var(--primary-fg);
+      border: none; font-size: 30px; line-height: 1; cursor: pointer;
+      box-shadow: var(--sh-float);
+      display: flex; align-items: center; justify-content: center;
+      transition: transform .25s, box-shadow .25s;
+    }
+    .fab:hover { transform: scale(1.08) translateY(-2px); box-shadow: var(--sh-deep); }
+    .fab:active { transform: scale(.95); }
+
+    /* ======================================
+       BACK BUTTON（畫面 2/3 回行事曆）
+    ====================================== */
+    .back-btn {
+      background: transparent; border: 2px solid var(--border);
+      color: var(--muted-fg); border-radius: 999px;
+      padding: 8px 16px; font-family: 'Nunito', sans-serif;
+      font-weight: 700; font-size: 13px; cursor: pointer;
+      transition: all .25s; display: flex; align-items: center; gap: 5px;
+    }
+    .back-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+    /* ======================================
+       MODAL（明細展開 / 修改）
+    ====================================== */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 120;
+      background: rgba(44,44,36,.4);
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      display: none; align-items: flex-end; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-card {
+      background: var(--card);
+      width: 100%; max-width: 560px;
+      border-radius: 36px 36px 0 0;
+      padding: 22px 22px 30px;
+      box-shadow: var(--sh-deep);
+      max-height: 88vh; overflow-y: auto;
+      animation: sheetin .3s ease both;
+    }
+    @keyframes sheetin {
+      from { transform: translateY(46px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+    .modal-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 12px; margin-bottom: 4px;
+    }
+    .modal-title { font-family: 'Fraunces', serif; font-weight: 700; font-size: 20px; }
+    .modal-sub { color: var(--muted-fg); font-size: 13px; margin-bottom: 18px; }
+    .modal-close {
+      width: 34px; height: 34px; flex-shrink: 0;
+      background: var(--muted); border: none; color: var(--accent-fg);
+      border-radius: 50%; font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s, transform .2s;
+    }
+    .modal-close:hover { background: var(--destructive); color: #fff; transform: rotate(90deg); }
+
+    .detail-item {
+      padding: 14px 16px; margin-bottom: 10px;
+      background: rgba(93,112,82,.05);
+      border: 1px solid rgba(93,112,82,.13);
+      border-radius: 20px;
+    }
+    .detail-item:last-child { margin-bottom: 0; }
+    .detail-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .detail-name { font-family: 'Fraunces', serif; font-weight: 700; font-size: 16px; }
+    .detail-figs { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--muted-fg); margin-top: 6px; }
+    .detail-figs strong { color: var(--fg); }
+    .detail-figs .fig-eff strong { color: var(--primary); }
+    .detail-figs .fig-edited { color: var(--secondary); }
+    .edit-mini-btn {
+      background: rgba(193,140,93,.12); border: none; color: var(--secondary);
+      border-radius: 999px; padding: 6px 14px; flex-shrink: 0;
+      font-family: 'Nunito', sans-serif; font-weight: 700; font-size: 12px;
+      cursor: pointer; transition: all .2s;
+    }
+    .edit-mini-btn:hover { background: var(--secondary); color: #fff; }
+
+    .edit-form {
+      margin-top: 12px; padding-top: 12px;
+      border-top: 1px dashed rgba(222,216,207,.8);
+      display: none;
+    }
+    .edit-form.open { display: block; animation: cardin .25s ease both; }
+    .edit-form label { margin-left: 6px; }
+    .edit-form-row { display: flex; gap: 8px; align-items: center; }
+    .edit-form-row input { flex: 1; height: 44px; }
+    .edit-save-btn {
+      height: 44px; padding: 0 18px; flex-shrink: 0;
+      background: var(--primary); color: var(--primary-fg);
+      border: none; border-radius: 999px;
+      font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 14px;
+      cursor: pointer; transition: transform .2s;
+    }
+    .edit-save-btn:hover { transform: scale(1.03); }
+    .edit-delta { font-size: 12px; color: var(--muted-fg); margin: 8px 0 0 6px; min-height: 16px; }
+    .edit-delta strong { font-family: 'Fraunces', serif; }
+
+    /* ======================================
+       LOADING OVERLAY
+    ====================================== */
+    #loading-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(253,252,248,.88);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      display: none; align-items: center; justify-content: center;
+    }
+    .loading-card {
+      background: var(--card);
+      border: 1px solid rgba(222,216,207,.6);
+      border-radius: 36px; padding: 44px 56px;
+      text-align: center; box-shadow: var(--sh-float);
+    }
+    .spinner {
+      width: 52px; height: 52px;
+      border: 4px solid var(--muted); border-top-color: var(--primary);
+      border-radius: 50%; margin: 0 auto 18px;
+      animation: spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-text { font-weight: 600; color: var(--muted-fg); font-size: 15px; }
+  </style>
+</head>
+<body>
+
+  <!-- background blobs -->
+  <div class="bg-blobs" aria-hidden="true">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+
+  <!-- ==================== SCREEN 1 : LOGIN ==================== -->
+  <div id="screen-1" class="screen">
+    <div class="login-wrap">
+
+      <!-- 登入表單 -->
+      <div id="phase-b">
+        <div class="login-card">
+          <div class="login-logo-wrap"><div class="login-logo">🌿</div></div>
+          <h1 class="login-title">午餐錢小幫手</h1>
+          <p class="login-sub">請登入以繼續</p>
+          <div id="err-login" class="err-msg" style="display:none"></div>
+          <div class="field">
+            <label>姓名</label>
+            <select id="login-name" oninput="hideE('err-login')">
+              <option value="">請選擇姓名</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:24px">
+            <label>密碼</label>
+            <input type="password" id="login-pwd" placeholder="請輸入密碼"
+              oninput="hideE('err-login')"
+              onkeydown="if(event.key==='Enter') handleLogin()">
+          </div>
+          <button class="submit-btn" onclick="handleLogin()">登入</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== SCREEN CAL : CALENDAR ==================== -->
+  <div id="screen-cal" class="screen hide-titles" style="display:none">
+
+    <div class="top-bar">
+      <div class="user-info">
+        <div class="avatar" id="cal-av"></div>
+        <div>
+          <div class="user-name" id="cal-nm"></div>
+          <div class="user-label">打帳者</div>
+        </div>
+      </div>
+      <button class="logout-btn" onclick="doLogout()">登出</button>
+    </div>
+
+    <div class="cal-card">
+      <div class="cal-nav">
+        <div class="cal-nav-left">
+          <button class="cal-arrow" onclick="changeMonth(-1)" title="上個月">‹</button>
+          <span class="cal-month-label" id="cal-month-label"></span>
+          <button class="cal-arrow" onclick="changeMonth(1)" title="下個月">›</button>
+        </div>
+        <div class="cal-tools">
+          <button class="cal-today-btn" onclick="gotoToday()">今天</button>
+          <button class="cal-toggle active" id="cal-toggle" onclick="toggleTitles()" title="顯示/隱藏標題文字" aria-label="顯示或隱藏標題文字"></button>
+        </div>
+      </div>
+
+      <div class="cal-weekdays">
+        <div class="cal-weekday wend">日</div>
+        <div class="cal-weekday">一</div>
+        <div class="cal-weekday">二</div>
+        <div class="cal-weekday">三</div>
+        <div class="cal-weekday">四</div>
+        <div class="cal-weekday">五</div>
+        <div class="cal-weekday wend">六</div>
+      </div>
+
+      <div class="cal-grid" id="cal-grid"></div>
+      <div class="cal-empty-hint" id="cal-empty-hint" style="display:none">這個月還沒有帳目，點右下角 ＋ 新增一筆</div>
+    </div>
+  </div>
+
+  <!-- 右下角新增按鈕（只在行事曆顯示） -->
+  <button class="fab" id="fab-add" onclick="openPayment()" title="新增打帳單" style="display:none">＋</button>
+
+  <!-- ==================== SCREEN 2 : PAYMENT INPUT ==================== -->
+  <div id="screen-2" class="screen" style="display:none">
+
+    <div class="top-bar">
+      <button class="back-btn" onclick="backToCalendar()">‹ 行事曆</button>
+      <div class="user-info">
+        <div class="avatar" id="s2-av"></div>
+        <div>
+          <div class="user-name" id="s2-nm"></div>
+          <div class="user-label">打帳者</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Block A：訂單資訊 -->
+    <div class="card card-a">
+      <div class="card-header">
+        <div class="card-icon">📋</div>
+        <h2>訂單資訊</h2>
+      </div>
+      <div class="field">
+        <label>訂單標題</label>
+        <input type="text" id="order-title" placeholder="例：25/11/27 午餐">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>打單日期</label>
+          <input type="date" id="order-date">
+        </div>
+        <div class="field">
+          <label>外送費（元）</label>
+          <input type="number" id="delivery" value="0" min="0" oninput="refreshAll()">
+        </div>
+      </div>
+      <div class="field">
+        <label>優惠折扣（元）</label>
+        <input type="number" id="discount" value="0" min="0" oninput="refreshAll()">
+      </div>
+    </div>
+
+    <!-- Block B：扣款名單 -->
+    <div class="card card-b">
+      <div class="card-header">
+        <div class="card-icon">👥</div>
+        <h2>扣款名單</h2>
+      </div>
+
+      <input type="file" id="uber-file-input" accept="image/*" multiple style="display:none" onchange="handleUberFiles(this.files)">
+      <button class="add-btn import-btn" onclick="g('uber-file-input').click()">📷 從 Uber Eats 截圖匯入</button>
+      <div class="import-hint" id="import-hint" style="display:none"></div>
+
+      <div id="person-list"></div>
+      <button class="add-btn" onclick="addRow()">＋ 新增一人</button>
+    </div>
+
+    <!-- Block C：總覽 -->
+    <div class="summary-card">
+      <h3><span>📊</span> 本單總覽</h3>
+      <div class="sum-row">
+        <span class="sum-label">不重複人數</span>
+        <span class="sum-val" id="sum-count">0 人</span>
+      </div>
+      <div class="sum-row">
+        <span class="sum-label">訂單金額合計</span>
+        <span class="sum-val" id="sum-order">0 元</span>
+      </div>
+      <div class="sum-row">
+        <span class="sum-label">含外送費 / 折扣</span>
+        <span class="sum-val hi" id="sum-final">0 元</span>
+      </div>
+    </div>
+
+    <button class="submit-btn" id="btn-submit" onclick="handleSubmit()">送出扣款</button>
+  </div>
+
+  <!-- ==================== SCREEN 3 : RESULTS ==================== -->
+  <div id="screen-3" class="screen" style="display:none">
+
+    <div class="top-bar">
+      <div class="user-info">
+        <div class="avatar" id="s3-av"></div>
+        <div>
+          <div class="user-name" id="s3-nm"></div>
+          <div class="user-label">打帳者</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-r">
+      <div class="card-header">
+        <div class="card-icon">✅</div>
+        <h2>扣款完成</h2>
+      </div>
+      <div id="results-list"></div>
+    </div>
+
+    <button class="submit-btn" onclick="backToCalendar()">回行事曆</button>
+    <button class="add-btn" style="margin-top:10px" onclick="resetScreen2()">再扣一筆</button>
+  </div>
+
+  <!-- ==================== ORDER DETAIL MODAL ==================== -->
+  <div class="modal-overlay" id="detail-modal" onclick="if(event.target===this)closeDetail()">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="modal-title" id="detail-title"></div>
+        </div>
+        <button class="modal-close" onclick="closeDetail()">✕</button>
+      </div>
+      <div class="modal-sub" id="detail-sub"></div>
+      <div id="detail-list"></div>
+    </div>
+  </div>
+
+  <!-- ==================== LOADING OVERLAY ==================== -->
+  <div id="loading-overlay">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <p id="loading-text">載入中...</p>
+    </div>
+  </div>
+
+  <script>
+    /* ============================================================
+       CONFIG  ← 請確認兩個 TAB 名稱與 Google Sheet 分頁名稱一致
+    ============================================================ */
+    const CFG = {
+      // ⚠ 這是獨立新專案，SCRIPT_URL 要換成自己新部署的 GAS 網址（見 午餐GAS.gs.txt 的部署說明），
+      //    不可以填同事那套的網址，否則會寫到同事的試算表。
+      SCRIPT_URL: '',
+      MAIN_TAB:   '主名單表',
+      FLOW_TAB:   '金流紀錄表',
+    };
+
+    /* 主名單欄位索引 (A=0) */
+    const C = { NAME:0, BALANCE:2, ROLE:5, WALLET:6, OVERDUE:7, PASSWORD:10 };
+
+    /* 金流紀錄表欄位索引 (A=0) */
+    const F = { TITLE:0, NAME:1, TYPE:2, AMT:3, DELIVERY:4, CHANGE:5,
+                BAL_BEFORE:6, BAL_AFTER:7, OP:8, NOTE:9, TS:10, WALLET:11, DATE:12 };
+
+    /* 本機測試模式：網址加 ?mock=1 即用假資料、跳過 Google 登入 */
+    const MOCK = new URLSearchParams(location.search).has('mock');
+
+    /* ============================================================
+       STATE
+    ============================================================ */
+    let listData = [];    // raw rows from sheet
+    let rowMap   = {};    // name → { rowNum (1-based in sheet), data }
+    let allNames = [];
+    let me       = null;  // { name, rowNum, data }
+    let rows     = [];    // payment rows in screen 2
+    let results  = [];    // result items for screen 3
+
+    /* 行事曆狀態 */
+    let flowData     = [];    // 金流紀錄原始列
+    let ordersByDate = {};    // 'YYYY-MM-DD' → [order]
+    let calYear      = 0;
+    let calMonth     = 0;     // 0-11
+    let showTitles   = false; // 是否顯示明細標題文字（預設隱藏，手機塞不下）
+    let activeOrder  = null;  // 目前展開中的訂單
+
+    /* ============================================================
+       APPS SCRIPT API helper
+    ============================================================ */
+    async function callScript(action, payload = null) {
+      if (MOCK) return mockApi(action, payload);
+      if (!CFG.SCRIPT_URL) throw new Error('請先設定 CFG.SCRIPT_URL');
+      let url = `${CFG.SCRIPT_URL}?action=${action}`;
+      if (payload !== null) url += `&data=${encodeURIComponent(JSON.stringify(payload))}`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`網路錯誤 (${r.status})`);
+      const json = await r.json();
+      if (json.error) throw new Error(json.error);
+      return json;
+    }
+
+    /* ============================================================
+       DATA LOAD
+    ============================================================ */
+    async function loadList() {
+      const d = await callScript('getList');
+      listData = d.values || [];
+      rowMap = {}; allNames = [];
+      listData.forEach((row, i) => {
+        const n = row[C.NAME];
+        if (n) { rowMap[n] = { rowNum: i + 2, data: row }; allNames.push(n); }
+      });
+    }
+
+    async function loadFlow() {
+      const d = await callScript('getFlow');
+      flowData = d.values || [];
+    }
+
+    /* ============================================================
+       CALENDAR — 資料整理
+    ============================================================ */
+    /* 把一列金流的日期正規化成 YYYY-MM-DD。
+       優先序：標題裡的用餐日（如 25/12/3午餐）→ 打單日期 → 送出時間 ts。
+       理由：訂單常是事後批次補登，打單日期/時間戳記都會擠在補登當天，
+       唯有標題開頭的日期才是真正的用餐日，用它排行事曆才不會全部堆一天。 */
+    function rowDate(row) {
+      return titleDate(row[F.TITLE]) || normDate(row[F.DATE]) || normDate(row[F.TS]);
+    }
+    /* 解析標題開頭的 YY/M/D（年份補成 20YY）。解析不出來回 null。
+       例：25/12/3-1飲料 → 2025-12-03（-1 是同日序號，忽略）；標題「1」→ null。 */
+    function titleDate(title) {
+      const m = String(title || '').match(/^(\d{2})\/(\d{1,2})\/(\d{1,2})/);
+      return m ? `20${m[1]}-${pad(+m[2])}-${pad(+m[3])}` : null;
+    }
+    function normDate(s) {
+      if (s === undefined || s === null) return null;
+      const m = String(s).trim().match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+      return m ? `${m[1]}-${pad(+m[2])}-${pad(+m[3])}` : null;
+    }
+
+    /* 訂單標題基底：只去掉結尾的 -服務費 / -服務費收入 後綴。
+       真實資料一筆訂單會拆成「X午餐 / X午餐-服務費 / X午餐-服務費收入」三種標題，
+       基底相同即視為同一筆訂單。
+       注意：不能用「第一個破折號」切，因為標題的日期本身可能含破折號
+       （例如同一天兩筆：25/12/3-1飲料、25/12/3-2飲料 是不同訂單）。 */
+    function orderBaseTitle(title) {
+      return title.replace(/-服務費(?:收入)?$/, '');
+    }
+    /* 是否為「打帳者服務費收入」列（不列入訂單明細）。
+       舊格式：類型=服務費收入；真實格式：類型=儲值且標題含「服務費收入」。 */
+    function isSvcIncomeRow(type, fullTitle) {
+      return type === '服務費收入' || (type === '儲值' && fullTitle.indexOf('服務費收入') >= 0);
+    }
+
+    /* 依「日期 + 標題基底」分組成訂單；每筆訂單彙整每人金額 */
+    function buildOrders() {
+      ordersByDate = {};
+      const map = {};
+      flowData.forEach(row => {
+        const date = rowDate(row);
+        if (!date) return;
+        const fullTitle = (row[F.TITLE] || '(無標題)') + '';
+        const base = orderBaseTitle(fullTitle);
+        const key = date + '||' + base;
+        let o = map[key];
+        if (!o) {
+          o = map[key] = { key, date, title: base, op: row[F.OP] || '', persons: {}, order: [] };
+          (ordersByDate[date] = ordersByDate[date] || []).push(o);
+        }
+        const type = (row[F.TYPE] || '') + '';
+        const name = (row[F.NAME] || '') + '';
+        const change = parseFloat(row[F.CHANGE]) || 0;
+        if (isSvcIncomeRow(type, fullTitle)) return; // 打帳者收入，不列在訂單明細
+        if (!name) return;
+        let p = o.persons[name];
+        if (!p) { p = o.persons[name] = { name, deduction: 0, svcFee: 0, corrections: 0, amt: 0, topup: 0 }; o.order.push(name); }
+        // 同時支援真實格式（服務費扣款/儲值）與舊格式（服務費）
+        if (type === '扣款')                                { p.deduction += -change; p.amt += parseFloat(row[F.AMT]) || 0; }
+        else if (type === '服務費' || type === '服務費扣款') { p.svcFee += -change; }
+        else if (type === '儲值')                            { p.topup += change; } // 儲值金額看「變動金額」F 欄
+        else if (type === '修改')                            { p.corrections += change; }
+      });
+    }
+
+    /* 某人在該訂單目前的「實際扣款」（含修改後） */
+    function effDeduction(p) { return round2(p.deduction - p.corrections); }
+
+    /* ============================================================
+       CALENDAR — 進入 / 重新整理
+    ============================================================ */
+    async function enterCalendar() {
+      goScreen('cal');
+      applyTitleVisibility();
+      g('cal-av').textContent = me.name[0];
+      g('cal-nm').textContent = me.name;
+      const now = new Date();
+      calYear = now.getFullYear();
+      calMonth = now.getMonth();
+      await refreshCalendar();
+    }
+
+    async function refreshCalendar() {
+      try {
+        loading('讀取帳目...');
+        await loadFlow();
+        buildOrders();
+        unload();
+        renderCalendar();
+      } catch (e) {
+        unload();
+        alert('讀取帳目失敗：' + e.message);
+        renderCalendar();
+      }
+    }
+
+    function backToCalendar() {
+      closeDetail();
+      enterCalendar();
+    }
+
+    /* ============================================================
+       CALENDAR — 渲染
+    ============================================================ */
+    function renderCalendar() {
+      g('cal-month-label').textContent = `${calYear} 年 ${calMonth + 1} 月`;
+      const grid = g('cal-grid');
+      grid.innerHTML = '';
+
+      const startDow = new Date(calYear, calMonth, 1).getDay(); // 0=日
+      const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+      const todayKey = toYMD(new Date());
+      let monthHasOrders = false;
+
+      for (let i = 0; i < startDow; i++) grid.appendChild(mk('div', 'cal-cell cal-cell-empty'));
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const key = `${calYear}-${pad(calMonth + 1)}-${pad(d)}`;
+        const cell = mk('div', 'cal-cell');
+        if (key === todayKey) cell.classList.add('is-today');
+
+        const num = mk('div', 'cal-day-num');
+        num.textContent = d;
+        cell.appendChild(num);
+
+        const orders = ordersByDate[key] || [];
+        if (orders.length) {
+          monthHasOrders = true;
+          cell.classList.add('has-orders');
+          const list = mk('div', 'cal-events');
+          orders.forEach(o => {
+            const ev = mk('button', 'cal-event');
+            ev.textContent = o.title;
+            ev.title = o.title;
+            ev.onclick = () => openOrderDetail(o.key);
+            list.appendChild(ev);
+          });
+          cell.appendChild(list);
+        }
+        grid.appendChild(cell);
+      }
+      g('cal-empty-hint').style.display = monthHasOrders ? 'none' : 'block';
+    }
+
+    function changeMonth(delta) {
+      calMonth += delta;
+      if (calMonth < 0) { calMonth = 11; calYear--; }
+      else if (calMonth > 11) { calMonth = 0; calYear++; }
+      renderCalendar();
+    }
+
+    function gotoToday() {
+      const now = new Date();
+      calYear = now.getFullYear();
+      calMonth = now.getMonth();
+      renderCalendar();
+    }
+
+    /* 細線眼睛圖示（feather 風格），跟隨按鈕文字色 currentColor */
+    const ICON_EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+    const ICON_EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.9 5.1A9.6 9.6 0 0 1 12 5c6.5 0 10 7 10 7a17.8 17.8 0 0 1-2.2 3.1M6.2 6.2A17.7 17.7 0 0 0 2 12s3.5 7 10 7a9.5 9.5 0 0 0 3.8-.8"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><line x1="3" y1="3" x2="21" y2="21"/></svg>';
+    function applyTitleVisibility() {
+      g('screen-cal').classList.toggle('hide-titles', !showTitles);
+      g('cal-toggle').classList.toggle('active', !showTitles);
+      g('cal-toggle').innerHTML = showTitles ? ICON_EYE : ICON_EYE_OFF;
+    }
+    function toggleTitles() {
+      showTitles = !showTitles;
+      applyTitleVisibility();
+    }
+
+    /* ============================================================
+       CALENDAR — 明細展開 / 修改
+    ============================================================ */
+    function findOrder(key) {
+      for (const date in ordersByDate) {
+        const o = ordersByDate[date].find(x => x.key === key);
+        if (o) return o;
+      }
+      return null;
+    }
+
+    function openOrderDetail(key) {
+      const o = findOrder(key);
+      if (!o) return;
+      activeOrder = o;
+      g('detail-title').textContent = o.title;
+      g('detail-sub').textContent = `${o.date}　·　打帳者 ${o.op || '—'}`;
+      renderDetailList();
+      g('detail-modal').classList.add('open');
+    }
+
+    function renderDetailList() {
+      const o = activeOrder;
+      const wrap = g('detail-list');
+      wrap.innerHTML = '';
+      o.order.forEach(name => {
+        const p = o.persons[name];
+        const eff = effDeduction(p);
+        const edited = Math.abs(p.corrections) > 0.001;
+
+        /* 純儲值列（有儲值、無扣款/服務費）：只顯示儲值金額，不提供修改 */
+        const isTopup = p.topup > 0.001 &&
+                        Math.abs(p.deduction) < 0.001 && Math.abs(p.svcFee) < 0.001;
+        if (isTopup) {
+          const tItem = mk('div', 'detail-item');
+          tItem.innerHTML = `
+            <div class="detail-top">
+              <div><div class="detail-name">${name}</div></div>
+            </div>
+            <div class="detail-figs">
+              <span class="fig-eff">儲值金額 <strong>${round2(p.topup)} 元</strong></span>
+            </div>`;
+          wrap.appendChild(tItem);
+          return;
+        }
+
+        const item = mk('div', 'detail-item');
+        const figs = `
+          <div class="detail-figs">
+            <span>訂單金額 <strong>${round2(p.amt)} 元</strong></span>
+            <span>服務費 <strong>${round2(p.svcFee)} 元</strong></span>
+            <span class="fig-eff">實際扣款 <strong>${eff} 元</strong></span>
+            ${edited ? `<span class="fig-edited">✎ 已修改（原 ${round2(p.deduction)}）</span>` : ''}
+          </div>`;
+        item.innerHTML = `
+          <div class="detail-top">
+            <div>
+              <div class="detail-name">${name}</div>
+            </div>
+            <button class="edit-mini-btn" onclick="toggleEdit('${cssName(name)}')">修改</button>
+          </div>
+          ${figs}
+          <div class="edit-form" id="edit-${cssName(name)}">
+            <label>修改後的實際扣款（元）</label>
+            <div class="edit-form-row">
+              <input type="number" id="editval-${cssName(name)}" value="${eff}" min="0"
+                     oninput="previewDelta('${cssName(name)}', ${eff})">
+              <button class="edit-save-btn" onclick="saveCorrection('${jsName(name)}')">確認</button>
+            </div>
+            <div class="edit-delta" id="delta-${cssName(name)}"></div>
+          </div>`;
+        wrap.appendChild(item);
+      });
+    }
+
+    function toggleEdit(safe) {
+      const f = g('edit-' + safe);
+      if (f) f.classList.toggle('open');
+    }
+
+    function previewDelta(safe, curEff) {
+      const v = parseFloat(g('editval-' + safe).value);
+      const box = g('delta-' + safe);
+      if (isNaN(v)) { box.innerHTML = ''; return; }
+      const delta = round2(curEff - v); // 正=退款回餘額, 負=再扣
+      if (delta === 0) { box.innerHTML = '與目前相同，不會新增紀錄'; return; }
+      box.innerHTML = delta > 0
+        ? `將<strong>退回 ${delta} 元</strong>到餘額（新增一筆修改流水帳）`
+        : `將<strong>再扣 ${-delta} 元</strong>（新增一筆修改流水帳）`;
+    }
+
+    async function saveCorrection(name) {
+      const o = activeOrder;
+      const p = o.persons[name];
+      const safe = cssName(name);
+      const newEff = parseFloat(g('editval-' + safe).value);
+      if (isNaN(newEff) || newEff < 0) { alert('請輸入有效金額'); return; }
+      const curEff = effDeduction(p);
+      const delta = round2(curEff - newEff);
+      if (delta === 0) { alert('金額沒有變動'); return; }
+
+      try {
+        loading('讀取最新餘額...');
+        await loadList();
+        const entry = rowMap[name];
+        if (!entry) throw new Error(`主名單找不到成員：${name}`);
+        const balBefore = parseFloat(entry.data[C.BALANCE]) || 0;
+        const balAfter  = round2(balBefore + delta);
+        const ts        = new Date().toLocaleString('zh-TW');
+        const wallet    = entry.data[C.WALLET] || '';
+        const note      = `修改實際扣款 ${curEff}→${newEff}`;
+
+        /* 新增一筆「修改」流水帳，不動原始紀錄 */
+        const flowRows = [[
+          o.title, name, '修改', 0, 0, delta,
+          balBefore, balAfter, me.name, note, ts, wallet, o.date
+        ]];
+        const balanceUpdates = [{ row: entry.rowNum, value: balAfter }];
+
+        loading('寫入修改...');
+        await callScript('submit', { flowRows, balanceUpdates });
+
+        loading('重新整理...');
+        await loadFlow();
+        buildOrders();
+        unload();
+        renderCalendar();
+
+        const updated = findOrder(o.key);   // 重新指向更新後的訂單
+        if (updated) { activeOrder = updated; renderDetailList(); }
+        else closeDetail();
+      } catch (e) {
+        unload();
+        alert('修改失敗：' + e.message);
+      }
+    }
+
+    function closeDetail() {
+      g('detail-modal').classList.remove('open');
+      activeOrder = null;
+    }
+
+    /* 把姓名轉成可安全用於 id 的字串 */
+    function cssName(n) { return encodeURIComponent(n).replace(/[%]/g, '_'); }
+    function jsName(n)  { return String(n).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
+    /* ============================================================
+       MOCK（本機測試用假資料）
+    ============================================================ */
+    let _mockList = null, _mockFlow = null;
+    function buildMock() {
+      const now = new Date();
+      const y = now.getFullYear(), m = now.getMonth();
+      const dk = d => `${y}-${pad(m + 1)}-${pad(d)}`;
+      _mockList = [
+        ['小明', '', 480, '', '', '', '現金', '', '', '', '1234'],
+        ['小華', '', 250, '', '', '', '現金', '', '', '', ''],
+        ['小美', '', 90,  '', '', '', '現金', '低額逾期', '', '', ''],
+        ['阿強', '', 600, '', '', '', '現金', '', '', '', ''],
+      ];
+      _mockFlow = [
+        ['5號 午餐', '小華', '扣款', 120, 0, -120, 370, 250, '小明', '', '', '現金', dk(5)],
+        ['5號 午餐', '小華', '服務費', 0, 0, -2, 250, 248, '小明', '', '', '現金', dk(5)],
+        ['5號 午餐', '小美', '扣款', 95, 0, -95, 185, 90, '小明', '', '', '現金', dk(5)],
+        ['12號 聚餐', '阿強', '扣款', 200, 30, -215, 815, 600, '小明', '', '', '現金', dk(12)],
+        ['12號 聚餐', '小明', '扣款', 150, 30, -165, 645, 480, '小明', '', '', '現金', dk(12)],
+        ['18號 飲料', '小美', '扣款', 55, 0, -55, 145, 90, '小明', '', '', '現金', dk(18)],
+        // --- 真實試算表格式（標題加後綴 + 類型=服務費扣款/儲值）---
+        ['25號 午餐', '靖茹', '扣款', 153, 1.29, -154.29, 1615.57, 1461.28, 'Gina', '', '', '靖茹', dk(25)],
+        ['25號 午餐-服務費', '靖茹', '服務費扣款', 2, 0, -2, 1461.28, 1459.28, 'Gina', '靖茹 服務費2元', '', '靖茹', dk(25)],
+        ['25號 午餐-服務費收入', 'Gina', '儲值', 2, 0, 2, 1826.4, 1828.4, 'Gina', '靖茹 服務費收入2元', '', 'Gina', dk(25)],
+        ['25號 飲料', '小羊', '扣款', 60, 0, -60, -334.78, -394.78, 'Gina', '', '', '小羊', dk(25)],
+        ['25號 儲值', '小羊', '儲值', 0, 0, 500, -394.78, 105.22, 'Gina', '小羊儲值500', '', '小羊', dk(25)],
+      ];
+    }
+    function mockApi(action, payload) {
+      if (!_mockList) buildMock();
+      if (action === 'getList') return Promise.resolve({ values: _mockList });
+      if (action === 'getFlow') return Promise.resolve({ values: _mockFlow.map(r => r.map(String)) });
+      if (action === 'submit') {
+        (payload.flowRows || []).forEach(r => _mockFlow.push(r));
+        (payload.balanceUpdates || []).forEach(u => {
+          const idx = u.row - 2;
+          if (_mockList[idx]) _mockList[idx][C.BALANCE] = u.value;
+        });
+        return Promise.resolve({ ok: true });
+      }
+      return Promise.resolve({ ok: true });
+    }
+
+    /* ============================================================
+       SCREEN 1 — LOGIN
+    ============================================================ */
+    async function loadAndLogin() {
+      try {
+        loading('載入名單...');
+        await loadList();
+        unload();
+        if (MOCK) {
+          // 本機測試：自動以第一個有密碼的打帳者登入，直接進行事曆
+          const cashier = listData.find(r => r[C.NAME] && r[C.PASSWORD]) || listData[0];
+          const name = cashier[C.NAME];
+          me = { name, rowNum: rowMap[name].rowNum, data: rowMap[name].data };
+          enterCalendar();
+          return;
+        }
+        const sel = g('login-name');
+        sel.innerHTML = '<option value="">請選擇姓名</option>';
+        listData.forEach(r => {
+          if (r[C.NAME] && r[C.PASSWORD]) {
+            const o = document.createElement('option');
+            o.value = o.textContent = r[C.NAME];
+            sel.appendChild(o);
+          }
+        });
+        g('login-name').focus();
+      } catch(e) {
+        unload();
+        showE('err-login', '載入失敗：' + e.message);
+      }
+    }
+
+    function handleLogin() {
+      const name = g('login-name').value;
+      const pwd  = g('login-pwd').value;
+      hideE('err-login');
+      if (!name) { showE('err-login', '請選擇姓名'); return; }
+      if (!pwd)  { showE('err-login', '請輸入密碼'); return; }
+      const entry = rowMap[name];
+      if (!entry || pwd !== (entry.data[C.PASSWORD] || '')) {
+        showE('err-login', '姓名或密碼錯誤'); return;
+      }
+      me = { name, rowNum: entry.rowNum, data: entry.data };
+      enterCalendar();
+    }
+
+    /* 從行事曆右下角 ＋ 進入打帳單 */
+    function openPayment() {
+      goScreen(2);
+      setupS2();
+    }
+
+    /* ============================================================
+       SCREEN 2 — PAYMENT INPUT
+    ============================================================ */
+    function setupS2() {
+      g('s2-av').textContent = me.name[0];
+      g('s2-nm').textContent = me.name;
+      g('order-title').value = '';
+      g('order-date').value  = today();
+      g('delivery').value    = '0';
+      g('discount').value    = '0';
+      g('import-hint').style.display = 'none';
+      rows = [{ name: '', amt: '' }];
+      renderRows();
+    }
+
+    function renderRows() {
+      const container = g('person-list');
+      container.innerHTML = '';
+      rows.forEach((row, i) => {
+        /* name select */
+        const sel = mk('select');
+        sel.innerHTML = '<option value="">請選擇姓名</option>';
+        allNames.forEach(n => {
+          const o = document.createElement('option');
+          o.value = o.textContent = n;
+          if (n === row.name) o.selected = true;
+          sel.appendChild(o);
+        });
+        sel.oninput = () => { rows[i].name = sel.value; refreshAll(); };
+
+        /* amount input */
+        const inp = mk('input');
+        inp.type = 'number'; inp.min = '0'; inp.placeholder = '金額';
+        inp.value = row.amt;
+        inp.oninput = () => { rows[i].amt = inp.value; refreshAll(); };
+
+        /* delete button */
+        const del = mk('button', 'del-btn');
+        del.innerHTML = '✕';
+        del.title = '移除此列';
+        del.onclick = () => {
+          if (rows.length === 1) return;
+          rows.splice(i, 1); renderRows(); updateSummary();
+        };
+
+        const pill = mk('div', 'person-row');
+        pill.append(sel, inp, del);
+
+        /* preview chip */
+        const chip = mk('span', 'preview-chip');
+        chip.id = `chip-${i}`;
+
+        const wrap = mk('div');
+        wrap.append(pill, chip);
+        container.appendChild(wrap);
+      });
+      refreshAll();
+    }
+
+    function refreshAll() {
+      rows.forEach((_, i) => updateChip(i));
+      updateSummary();
+    }
+
+    function uniqueCount() {
+      return new Set(rows.map(r => r.name).filter(Boolean)).size || 1;
+    }
+
+    function calcDeduction(i) {
+      const amt  = parseFloat(rows[i].amt) || 0;
+      const del  = parseFloat(g('delivery').value) || 0;
+      const dis  = parseFloat(g('discount').value) || 0;
+      const uc   = uniqueCount();
+      return Math.round((amt - dis / uc + del / uc) * 100) / 100;
+    }
+
+    function updateChip(i) {
+      const chip = g(`chip-${i}`);
+      if (!chip) return;
+      if (!rows[i].name || rows[i].amt === '') { chip.innerHTML = ''; return; }
+      chip.innerHTML = `↳ 實際扣款 <strong>${calcDeduction(i)} 元</strong>`;
+    }
+
+    function updateSummary() {
+      const uc    = uniqueCount();
+      const total = rows.reduce((s, r) => s + (parseFloat(r.amt) || 0), 0);
+      const del   = parseFloat(g('delivery').value) || 0;
+      const dis   = parseFloat(g('discount').value) || 0;
+      g('sum-count').textContent = `${uc} 人`;
+      g('sum-order').textContent = `${total} 元`;
+      g('sum-final').textContent = `${total + del - dis} 元`;
+    }
+
+    function addRow() { rows.push({ name: '', amt: '' }); renderRows(); }
+
+    /* ============================================================
+       UBER EATS 截圖匯入
+    ============================================================ */
+    /* 把圖片壓縮到合理大小再轉 base64，避免截圖太大傳輸失敗 */
+    function resizeImageFile(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const reader = new FileReader();
+        reader.onload = () => { img.src = reader.result; };
+        reader.onerror = reject;
+        img.onload = () => {
+          const maxDim = 1400;
+          let w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            const scale = maxDim / Math.max(w, h);
+            w = Math.round(w * scale); h = Math.round(h * scale);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          resolve({ mimeType: 'image/jpeg', data: dataUrl.split(',')[1] });
+        };
+        img.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function handleUberFiles(fileList) {
+      const files = Array.from(fileList || []);
+      g('uber-file-input').value = ''; // 讓同一批檔案可以再選一次
+      if (!files.length) return;
+
+      const hint = g('import-hint');
+      hint.className = 'import-hint';
+      hint.style.display = 'block';
+      hint.textContent = `辨識中...（${files.length} 張截圖）`;
+
+      try {
+        const images = await Promise.all(files.map(resizeImageFile));
+        const r = await fetch('/api/parse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ images })
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || '辨識失敗');
+        applyUberImport(d);
+      } catch (e) {
+        hint.className = 'import-hint warn';
+        hint.textContent = '匯入失敗：' + e.message + '（可以重新截圖再試一次，或直接手動輸入）';
+      }
+    }
+
+    /* 姓名模糊比對：完全一致優先，再來互為子字串，最後看是否有連續 2 個字相同。
+       比對不到就留空，既有的送出檢查本來就會擋「有列尚未選擇姓名」，不會誤送給錯的人。 */
+    function matchName(ubName, names) {
+      const clean = s => String(s || '').replace(/[.\s]/g, '');
+      const ub = clean(ubName);
+      if (!ub) return '';
+      let hit = names.find(n => clean(n) === ub);
+      if (hit) return hit;
+      hit = names.find(n => { const cn = clean(n); return cn && (cn.includes(ub) || ub.includes(cn)); });
+      if (hit) return hit;
+      for (const n of names) {
+        const cn = clean(n);
+        for (let i = 0; i < cn.length - 1; i++) {
+          if (ub.includes(cn.substring(i, i + 2))) return n;
+        }
+      }
+      return '';
+    }
+
+    function applyUberImport(d) {
+      const people = d.people || [];
+      let unmatched = 0;
+      rows = people.map(p => {
+        const matched = matchName(p.ubName, allNames);
+        if (!matched) unmatched++;
+        return { name: matched, amt: String(p.amt) };
+      });
+      if (!rows.length) rows = [{ name: '', amt: '' }];
+
+      g('delivery').value = d.delivery || 0;
+      g('discount').value = d.discount || 0;
+      renderRows();
+
+      const hint = g('import-hint');
+      if (unmatched > 0) {
+        hint.className = 'import-hint warn';
+        hint.textContent = `已匯入 ${people.length} 人，其中 ${unmatched} 人在名單裡找不到對得上的姓名，請往下手動選擇（沒選姓名的話沒辦法送出）。外送費/優惠折扣已自動帶入，送出前請再核對一次金額。`;
+      } else {
+        hint.className = 'import-hint';
+        hint.textContent = `已匯入 ${people.length} 人，外送費/優惠折扣已自動帶入。請核對品項與金額無誤後再按「送出扣款」。`;
+      }
+    }
+
+    /* ============================================================
+       SUBMIT
+    ============================================================ */
+    async function handleSubmit() {
+      const title = g('order-title').value.trim();
+      if (!title)                        { alert('請填寫訂單標題'); return; }
+      if (rows.some(r => !r.name))       { alert('有列尚未選擇姓名'); return; }
+
+      const btn = g('btn-submit');
+      btn.disabled = true;
+      loading('讀取最新資料...');
+      try {
+        await loadList(); // always reload for fresh balances
+
+        const delivery = parseFloat(g('delivery').value) || 0;
+        const discount = parseFloat(g('discount').value) || 0;
+        const uc        = uniqueCount();
+        const ts        = new Date().toLocaleString('zh-TW');
+        const op        = me.name;
+        const orderDate = g('order-date').value || today(); // M 欄：打單日期 (YYYY-MM-DD)
+
+        /* find 打帳者（K 欄有值者即為打帳者） */
+        const cashierEntry = Object.values(rowMap).find(e =>
+          e.data[C.PASSWORD] && e.data[C.PASSWORD].trim() !== '');
+        if (!cashierEntry)
+          throw new Error('找不到打帳者（請確認主名單 K 欄有填入打帳者名稱）');
+        const cashier = cashierEntry.data[C.NAME];
+
+        /* in-memory running balances */
+        const bal = {};
+        Object.entries(rowMap).forEach(([n, e]) =>
+          bal[n] = parseFloat(e.data[C.BALANCE]) || 0);
+
+        const flowRows = [];
+        results = [];
+
+        loading('計算金額...');
+        for (const row of rows) {
+          const { name } = row;
+          const entry = rowMap[name];
+          if (!entry) throw new Error(`找不到成員：${name}`);
+
+          const amt       = parseFloat(row.amt) || 0;
+          const delShare  = Math.round(delivery / uc * 100) / 100;
+          const disShare  = Math.round(discount / uc * 100) / 100;
+          const deduction = Math.round((amt - disShare + delShare) * 100) / 100;
+          const isOverdue = (entry.data[C.OVERDUE] || '').trim() === '低額逾期';
+          const svcFee    = isOverdue ? 12 : 2;
+          const wallet    = entry.data[C.WALLET] || '';
+
+          /* 1. 訂餐扣款 */
+          const b1 = bal[name];
+          bal[name] = Math.round((b1 - deduction) * 100) / 100;
+          flowRows.push([title, name, '扣款', amt, delivery, -deduction,
+                         b1, bal[name], op, '', ts, wallet, orderDate]);
+
+          /* 2. 服務費扣除 */
+          const b2 = bal[name];
+          bal[name] = Math.round((b2 - svcFee) * 100) / 100;
+          flowRows.push([title, name, '服務費', 0, 0, -svcFee,
+                         b2, bal[name], op, '', ts, wallet, orderDate]);
+
+          /* 3. 服務費儲入打帳者 */
+          const b3 = bal[cashier];
+          bal[cashier] = Math.round((b3 + svcFee) * 100) / 100;
+          flowRows.push([title, cashier, '服務費收入', 0, 0, svcFee,
+                         b3, bal[cashier], op, '', ts, '', orderDate]);
+
+          results.push({ name, deduction, svcFee, newBal: bal[name] });
+        }
+
+        /* write to sheet via Apps Script */
+        loading('寫入資料...');
+        const balanceUpdates = Object.entries(bal)
+          .filter(([n]) => rowMap[n])
+          .map(([n, v]) => ({ row: rowMap[n].rowNum, value: v }));
+        await callScript('submit', { flowRows, balanceUpdates });
+
+        unload();
+        showResults();
+      } catch(e) {
+        unload();
+        alert('送出失敗：' + e.message);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    /* ============================================================
+       SCREEN 3 — RESULTS
+    ============================================================ */
+    function showResults() {
+      g('s3-av').textContent = me.name[0];
+      g('s3-nm').textContent = me.name;
+      const list = g('results-list');
+      list.innerHTML = '';
+      results.forEach(r => {
+        const item = mk('div', 'result-item');
+        item.innerHTML = `
+          <div class="result-name">${r.name}</div>
+          <div class="result-row">
+            <span>扣款 <strong>－${r.deduction} 元</strong></span>
+            <span>服務費 <strong>－${r.svcFee} 元</strong></span>
+            <span class="result-bal">結餘 <strong>${r.newBal} 元</strong></span>
+          </div>`;
+        list.appendChild(item);
+      });
+      goScreen(3);
+    }
+
+    function resetScreen2() { goScreen(2); setupS2(); }
+
+    /* ============================================================
+       NAVIGATION & HELPERS
+    ============================================================ */
+    function goScreen(n) {
+      ['1', 'cal', '2', '3'].forEach(i => {
+        const el = g(`screen-${i}`);
+        if (!el) return;
+        el.style.display = (String(i) === String(n)) ? (i === '1' ? 'flex' : 'block') : 'none';
+      });
+      g('fab-add').style.display = (String(n) === 'cal') ? 'flex' : 'none';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function doLogout() {
+      me = null;
+      g('login-name').value = '';
+      g('login-pwd').value  = '';
+      hideE('err-login');
+      goScreen(1);
+    }
+
+    /* DOM utils */
+    function g(id)         { return document.getElementById(id); }
+    function mk(tag, cls)  { const e = document.createElement(tag); if (cls) e.className = cls; return e; }
+    function showE(id, msg) { const e = g(id); e.textContent = msg; e.style.display = 'block'; }
+    function hideE(id)      { g(id).style.display = 'none'; }
+    function loading(msg)   { g('loading-text').textContent = msg; g('loading-overlay').style.display = 'flex'; }
+    function unload()       { g('loading-overlay').style.display = 'none'; }
+    function today()        { return new Date().toISOString().split('T')[0]; }
+    function round2(n)      { return Math.round((parseFloat(n) || 0) * 100) / 100; }
+    function pad(n)         { return String(n).padStart(2, '0'); }
+    function toYMD(d)       { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+
+    /* 頁面載入時自動讀取名單 */
+    window.addEventListener('DOMContentLoaded', loadAndLogin);
+  </script>
+</body>
+</html>

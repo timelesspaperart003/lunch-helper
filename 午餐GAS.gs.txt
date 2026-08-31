@@ -1,0 +1,192 @@
+// ============================================================
+// 午餐叫飯小幫手（獨立版）— Google Apps Script 後端
+//
+// 部署方式：
+//   1. 建一個新的 Google Apps Script 專案（在 script.google.com 新增，
+//      不要用同事那個既有的專案）
+//   2. 貼上這整段程式碼，存檔
+//   3. 左側「專案設定」齒輪 > 指令碼屬性(Script Properties)，新增：
+//        GEMINI_API_KEY = 你在 aistudio.google.com 申請的金鑰
+//   4. 上方函式下拉選單選 setupSpreadsheet，按執行（第一次會跳權限授權，
+//      同意即可）。執行完在「執行紀錄」會看到新試算表的網址，記下來，
+//      之後到那份試算表的「主名單表」手動建立初始名單（姓名 + 打帳者欄填密碼）
+//   5. 部署 > New deployment > Web App
+//        - Execute as: 我 (Me)
+//        - Who has access: 任何人 (Anyone)
+//   6. 複製產生的網址，告訴 Claude 填入 Worker 的 GAS_URL
+//
+// 之後如果改了程式碼，要「部署 > 管理部署作業 > 編輯(鉛筆) > 新增版本」
+// 才會生效，直接存檔不會更新已部署的網址內容。
+// ============================================================
+
+const MAIN_TAB = '主名單表';
+const FLOW_TAB = '金流紀錄表';
+const GEMINI_MODEL = 'gemini-2.0-flash';
+
+function getSS_() {
+  const id = PropertiesService.getScriptProperties().getProperty('SS_ID');
+  if (!id) throw new Error('尚未設定試算表，請先在編輯器執行 setupSpreadsheet()');
+  return SpreadsheetApp.openById(id);
+}
+
+// 一次性：建立全新試算表 + 主名單表/金流紀錄表兩分頁 + 表頭。
+// 在 Apps Script 編輯器手動執行一次即可，不用每次部署都跑。
+function setupSpreadsheet() {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('SS_ID')) {
+    Logger.log('已經建立過試算表了，網址：' + SpreadsheetApp.openById(props.getProperty('SS_ID')).getUrl());
+    Logger.log('如果要重新建立一份新的，請先手動清除 Script Properties 裡的 SS_ID。');
+    return;
+  }
+
+  const ss = SpreadsheetApp.create('午餐錢小幫手（獨立版）');
+  const main = ss.getSheets()[0];
+  main.setName(MAIN_TAB);
+  main.getRange(1, 1, 1, 11).setValues([[
+    '姓名', 'LINE_ID', '餘額', '上次通知日', '註冊時間', '角色',
+    '共用錢包歸戶', '低額逾期狀態', '低額開始日', '最近提醒日', '打帳者'
+  ]]);
+
+  const flow = ss.insertSheet(FLOW_TAB);
+  flow.getRange(1, 1, 1, 13).setValues([[
+    '訂單標題', '姓名', '類型', '訂單金額', '外送費', '變動金額',
+    '原餘額', '新餘額', '操作者', '備註', '時間戳記', '共用錢包歸戶', '打單日期'
+  ]]);
+
+  props.setProperty('SS_ID', ss.getId());
+  Logger.log('新試算表已建立：' + ss.getUrl());
+  Logger.log('接下來請到「主名單表」手動建立初始名單（姓名 + 打帳者欄填密碼，密碼欄填了才能登入/當打帳者）');
+}
+
+function doGet(e) {
+  try {
+    const action = e.parameter.action;
+    const ss = getSS_();
+
+    // --- 讀取名單 ---
+    if (action === 'getList') {
+      const sheet = ss.getSheetByName(MAIN_TAB);
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 2) return respond_({ values: [] });
+      const data = sheet.getRange(2, 1, lastRow - 1, 11).getValues();
+      return respond_({ values: data.filter(function (row) { return row[0] !== ''; }) });
+    }
+
+    // --- 讀取金流紀錄（行事曆用）---
+    if (action === 'getFlow') {
+      const sheet = ss.getSheetByName(FLOW_TAB);
+      const lastRow = sheet.getLastRow();
+      const lastCol = Math.max(sheet.getLastColumn(), 13); // 至少讀到 M 欄（打單日期）
+      if (lastRow < 2) return respond_({ values: [] });
+      const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getDisplayValues();
+      return respond_({ values: data.filter(function (row) { return row[0] !== '' || row[1] !== ''; }) });
+    }
+
+    // --- 送出扣款/儲值/修改 ---
+    if (action === 'submit') {
+      const payload = JSON.parse(e.parameter.data);
+      const lock = LockService.getScriptLock();
+      lock.waitLock(20000);
+      try {
+        const flowSheet = ss.getSheetByName(FLOW_TAB);
+        const flowRows = payload.flowRows;
+        if (flowRows.length > 0) {
+          flowSheet
+            .getRange(flowSheet.getLastRow() + 1, 1, flowRows.length, flowRows[0].length)
+            .setValues(flowRows);
+        }
+        const mainSheet = ss.getSheetByName(MAIN_TAB);
+        payload.balanceUpdates.forEach(function (u) {
+          mainSheet.getRange(u.row, 3).setValue(u.value);
+        });
+      } finally {
+        lock.releaseLock();
+      }
+      return respond_({ ok: true });
+    }
+
+    return respond_({ error: 'unknown action: ' + action });
+  } catch (err) {
+    return respond_({ error: err.message });
+  }
+}
+
+// 截圖辨識：圖片資料量大，塞不進網址查詢字串，所以用真正的 POST
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents);
+    if (body.action === 'parseUberOrder') {
+      return respond_(parseUberOrder_(body.images || []));
+    }
+    return respond_({ ok: false, error: 'unknown action: ' + body.action });
+  } catch (err) {
+    return respond_({ ok: false, error: err.message });
+  }
+}
+
+function parseUberOrder_(images) {
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) return { ok: false, error: 'GEMINI_API_KEY 尚未設定（去 Script Properties 加一組）' };
+  if (!images.length) return { ok: false, error: '沒有收到圖片' };
+
+  const parts = [{
+    text: '這是 Uber Eats 團體訂購「結帳」畫面的截圖（可能有多張，是同一筆訂單滑動後的不同段落）。' +
+      '請讀出每個人的姓名，以及他點的品項金額加總（同一人有多個品項就加總成一個數字）。' +
+      '同時讀出整筆訂單的：小計 subtotal、外送費 deliveryFee、服務費/費用 serviceFee、' +
+      '折扣（例如 Uber One 點數折扣）discount、總計 total —— 這些金額都要是「實際折扣後」的數字，' +
+      '不要用被劃掉的原價。只回報你在截圖中能清楚讀到的資料，看不到的欄位填 0，不要自己編造姓名或金額。' +
+      '用以下 JSON 格式回答，不要加任何其他文字或說明：' +
+      '{"subtotal":0,"deliveryFee":0,"serviceFee":0,"discount":0,"total":0,' +
+      '"people":[{"name":"","amt":0}]}'
+  }];
+  images.forEach(function (img) {
+    parts.push({ inline_data: { mime_type: img.mimeType, data: img.data } });
+  });
+
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL +
+    ':generateContent?key=' + encodeURIComponent(apiKey);
+  const resp = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    muteHttpExceptions: true,
+    payload: JSON.stringify({
+      contents: [{ parts: parts }],
+      generationConfig: { responseMimeType: 'application/json' }
+    })
+  });
+
+  if (resp.getResponseCode() !== 200) {
+    return { ok: false, error: 'Gemini 呼叫失敗 (' + resp.getResponseCode() + ')：' + resp.getContentText().slice(0, 300) };
+  }
+
+  var parsed;
+  try {
+    const data = JSON.parse(resp.getContentText());
+    const text = data.candidates[0].content.parts[0].text;
+    parsed = JSON.parse(text);
+  } catch (e) {
+    return { ok: false, error: '辨識結果解析失敗，請重新截圖再試一次' };
+  }
+
+  const delivery = round2_((parsed.deliveryFee || 0) + (parsed.serviceFee || 0));
+  const discount = round2_(parsed.discount || 0);
+  const people = (parsed.people || [])
+    .filter(function (p) { return p.name && p.amt; })
+    .map(function (p) { return { ubName: p.name, amt: round2_(p.amt) }; });
+
+  return {
+    ok: true,
+    delivery: delivery,
+    discount: discount,
+    people: people,
+    receipt: { subtotal: parsed.subtotal || 0, total: parsed.total || 0 }
+  };
+}
+
+function round2_(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; }
+
+function respond_(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}

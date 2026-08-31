@@ -590,6 +590,14 @@
       cursor: pointer; transition: all .2s;
     }
     .edit-mini-btn:hover { background: var(--secondary); color: #fff; }
+    .del-mini-btn {
+      background: rgba(168,84,72,.1); border: none; color: var(--destructive);
+      border-radius: 999px; padding: 6px 14px; flex-shrink: 0;
+      font-family: 'Nunito', sans-serif; font-weight: 700; font-size: 12px;
+      cursor: pointer; transition: all .2s; margin-left: 6px;
+    }
+    .del-mini-btn:hover { background: var(--destructive); color: #fff; }
+    .detail-btns { display: flex; flex-shrink: 0; }
 
     .edit-form {
       margin-top: 12px; padding-top: 12px;
@@ -1008,7 +1016,10 @@
         const type = (row[F.TYPE] || '') + '';
         const name = (row[F.NAME] || '') + '';
         const change = parseFloat(row[F.CHANGE]) || 0;
-        if (isSvcIncomeRow(type, fullTitle)) return; // 打帳者收入，不列在訂單明細
+        if (isSvcIncomeRow(type, fullTitle)) {
+          if (!o.svcIncomeName) o.svcIncomeName = name; // 記住是誰收了這筆訂單的服務費，刪除時要收回
+          return; // 打帳者收入，不列在訂單明細
+        }
         if (!name) return;
         let p = o.persons[name];
         if (!p) { p = o.persons[name] = { name, deduction: 0, svcFee: 0, corrections: 0, amt: 0, topup: 0 }; o.order.push(name); }
@@ -1210,14 +1221,16 @@
       const edited = Math.abs(p.corrections) > 0.001;
       const idSuf = cssName(o.key) + '_' + cssName(name);
 
-      /* 純儲值列（有儲值、無扣款/服務費）：只顯示儲值金額，不提供修改 */
+      /* 純儲值列（有儲值、無扣款/服務費）：只顯示儲值金額，可以刪除(退回) */
       const isTopup = p.topup > 0.001 &&
                       Math.abs(p.deduction) < 0.001 && Math.abs(p.svcFee) < 0.001;
       if (isTopup) {
+        const canDelTopup = me && me.canTopup;
         const tItem = mk('div', 'detail-item');
         tItem.innerHTML = `
           <div class="detail-top">
             <div><div class="detail-name">${name}</div></div>
+            ${canDelTopup ? `<button class="del-mini-btn" onclick="deleteTopupEntry('${jsName(o.key)}', '${jsName(name)}')">刪除</button>` : ''}
           </div>
           <div class="detail-figs">
             <span class="fig-eff">儲值金額 <strong>${round2(p.topup)} 元</strong></span>
@@ -1239,7 +1252,11 @@
           <div>
             <div class="detail-name">${name}</div>
           </div>
-          ${canEdit ? `<button class="edit-mini-btn" onclick="toggleEdit('${idSuf}')">修改</button>` : ''}
+          ${canEdit ? `
+          <div class="detail-btns">
+            <button class="edit-mini-btn" onclick="toggleEdit('${idSuf}')">修改</button>
+            <button class="del-mini-btn" onclick="deletePersonOrder('${jsName(o.key)}', '${jsName(name)}')">刪除</button>
+          </div>` : ''}
         </div>
         ${figs}
         ${canEdit ? `
@@ -1320,6 +1337,125 @@
       } catch (e) {
         unload();
         alert('修改失敗：' + e.message);
+      }
+    }
+
+    /* 刪除一筆扣款訂單裡的某個人：退回扣款+服務費，並收回打帳者當初拿到的服務費收入。
+       不會真的移除原始紀錄(避免破壞其他人的餘額鏈)，而是補寫抵銷用的流水帳，
+       跟「修改」是同一套邏輯，只是刪除等於「改成 0 元」再加上服務費也一起退。 */
+    async function deletePersonOrder(orderKey, name) {
+      if (!me || !me.canOrder) { alert('沒有刪除權限'); return; }
+      const o = findOrder(orderKey);
+      if (!o) { alert('找不到這筆訂單，可能剛好被重新整理了，請重新開啟'); return; }
+      const p = o.persons[name];
+      const eff = effDeduction(p);
+      const svcFee = round2(p.svcFee);
+      if (Math.abs(eff) < 0.001 && Math.abs(svcFee) < 0.001) { alert('這筆已經是 0 元了，不用刪除'); return; }
+      if (!confirm(`確定要刪除「${name}」在「${o.title}」的這筆紀錄嗎？\n扣款 ${eff} 元＋服務費 ${svcFee} 元都會退回。這個動作沒辦法復原（但會留下抵銷紀錄可以查）。`)) return;
+
+      try {
+        loading('讀取最新餘額...');
+        await loadList();
+        const entry = rowMap[name];
+        if (!entry) throw new Error(`主名單找不到成員：${name}`);
+        const cashierName  = o.svcIncomeName || '';
+        const cashierEntry = (cashierName && rowMap[cashierName]) ? rowMap[cashierName] : null;
+        const ts     = new Date().toLocaleString('zh-TW');
+        const wallet = entry.data[C.WALLET] || '';
+        const flowRows = [];
+
+        /* 用姓名累加餘額(不是各自獨立算)，這樣「打帳者刪自己那筆訂單」時，
+           退回服務費(+)跟收回服務費收入(-)才會正確互相抵銷，不會多算或少算 */
+        const bal = { [name]: parseFloat(entry.data[C.BALANCE]) || 0 };
+        if (cashierEntry && !(cashierName in bal)) {
+          bal[cashierName] = parseFloat(cashierEntry.data[C.BALANCE]) || 0;
+        }
+
+        if (Math.abs(eff) > 0.001) {
+          const b0 = bal[name];
+          bal[name] = round2(b0 + eff);
+          flowRows.push([o.title, name, '修改', 0, 0, eff, b0, bal[name], me.name, `刪除訂單，退回扣款 ${eff} 元`, ts, wallet, o.date]);
+        }
+        if (Math.abs(svcFee) > 0.001) {
+          const b0 = bal[name];
+          bal[name] = round2(b0 + svcFee);
+          flowRows.push([o.title, name, '服務費', 0, 0, svcFee, b0, bal[name], me.name, `刪除訂單，退回服務費 ${svcFee} 元`, ts, wallet, o.date]);
+
+          // 收回打帳者當初因為這個人這筆訂單拿到的服務費收入（打帳者刪自己那筆時，跟上面互相抵銷）
+          if (cashierEntry) {
+            const cb0 = bal[cashierName];
+            bal[cashierName] = round2(cb0 - svcFee);
+            flowRows.push([o.title, cashierName, '服務費收入', 0, 0, -svcFee, cb0, bal[cashierName], me.name, `刪除訂單，收回${name}那筆的服務費收入`, ts, '', o.date]);
+          }
+        }
+
+        const balanceUpdates = [{ row: entry.rowNum, value: bal[name] }];
+        if (cashierEntry && cashierName !== name) {
+          balanceUpdates.push({ row: cashierEntry.rowNum, value: bal[cashierName] });
+        }
+
+        loading('寫入刪除...');
+        await callScript('submit', { flowRows, balanceUpdates });
+
+        loading('重新整理...');
+        await loadFlow();
+        buildOrders();
+        unload();
+        renderCalendar();
+
+        if (activeDay) {
+          renderDetailList();
+        } else {
+          const updated = findOrder(o.key);
+          if (updated) { activeOrder = updated; renderDetailList(); }
+          else closeDetail();
+        }
+      } catch (e) {
+        unload();
+        alert('刪除失敗：' + e.message);
+      }
+    }
+
+    /* 刪除一筆儲值紀錄：把儲值金額扣回去 */
+    async function deleteTopupEntry(orderKey, name) {
+      if (!me || !me.canTopup) { alert('沒有刪除權限'); return; }
+      const o = findOrder(orderKey);
+      if (!o) { alert('找不到這筆紀錄，可能剛好被重新整理了，請重新開啟'); return; }
+      const p = o.persons[name];
+      const amt = round2(p.topup);
+      if (Math.abs(amt) < 0.001) { alert('這筆已經是 0 元了，不用刪除'); return; }
+      if (!confirm(`確定要刪除「${name}」的這筆儲值 ${amt} 元嗎？餘額會扣回去，這個動作沒辦法復原（但會留下抵銷紀錄可以查）。`)) return;
+
+      try {
+        loading('讀取最新餘額...');
+        await loadList();
+        const entry = rowMap[name];
+        if (!entry) throw new Error(`主名單找不到成員：${name}`);
+        const b0 = parseFloat(entry.data[C.BALANCE]) || 0;
+        const b1 = round2(b0 - amt);
+        const ts = new Date().toLocaleString('zh-TW');
+        const flowRows = [[o.title, name, '儲值', 0, 0, -amt, b0, b1, me.name, '刪除儲值紀錄', ts, entry.data[C.WALLET] || '', o.date]];
+        const balanceUpdates = [{ row: entry.rowNum, value: b1 }];
+
+        loading('寫入刪除...');
+        await callScript('submit', { flowRows, balanceUpdates });
+
+        loading('重新整理...');
+        await loadFlow();
+        buildOrders();
+        unload();
+        renderCalendar();
+
+        if (activeDay) {
+          renderDetailList();
+        } else {
+          const updated = findOrder(o.key);
+          if (updated) { activeOrder = updated; renderDetailList(); }
+          else closeDetail();
+        }
+      } catch (e) {
+        unload();
+        alert('刪除失敗：' + e.message);
       }
     }
 

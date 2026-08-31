@@ -887,7 +887,7 @@
 
     /* 金流紀錄表欄位索引 (A=0) */
     const F = { TITLE:0, NAME:1, TYPE:2, AMT:3, DELIVERY:4, CHANGE:5,
-                BAL_BEFORE:6, BAL_AFTER:7, OP:8, NOTE:9, TS:10, WALLET:11, DATE:12 };
+                BAL_BEFORE:6, BAL_AFTER:7, OP:8, NOTE:9, TS:10, WALLET:11, DATE:12, SCREENSHOT:13 };
 
     /* 本機測試模式：網址加 ?mock=1 即用假資料、跳過 Google 登入 */
     const MOCK = new URLSearchParams(location.search).has('mock');
@@ -900,6 +900,7 @@
     let allNames = [];
     let me       = null;  // { name, rowNum, data }
     let rows     = [];    // payment rows in screen 2
+    let importedScreenshotLink = ''; // 這次用截圖匯入時，Drive 存檔連結（手動輸入的訂單這欄是空的）
     let results  = [];    // result items for screen 3
 
     /* 行事曆狀態 */
@@ -992,9 +993,10 @@
         const key = date + '||' + base;
         let o = map[key];
         if (!o) {
-          o = map[key] = { key, date, title: base, op: row[F.OP] || '', persons: {}, order: [], hasDeduction: false, hasTopup: false };
+          o = map[key] = { key, date, title: base, op: row[F.OP] || '', persons: {}, order: [], hasDeduction: false, hasTopup: false, screenshotLink: '' };
           (ordersByDate[date] = ordersByDate[date] || []).push(o);
         }
+        if (!o.screenshotLink && row[F.SCREENSHOT]) o.screenshotLink = row[F.SCREENSHOT];
         const type = (row[F.TYPE] || '') + '';
         const name = (row[F.NAME] || '') + '';
         const change = parseFloat(row[F.CHANGE]) || 0;
@@ -1146,13 +1148,20 @@
       return null;
     }
 
+    /* 訂單有存截圖時附一個可以點的連結，第一張為主(通常也只有1~2張) */
+    function screenshotLinkHtml_(o) {
+      if (!o.screenshotLink) return '';
+      const first = o.screenshotLink.split(',')[0].trim();
+      return ` ・ <a href="${first}" target="_blank" rel="noopener" style="color:var(--primary);font-weight:700;">📷 查看截圖</a>`;
+    }
+
     function openOrderDetail(key) {
       const o = findOrder(key);
       if (!o) return;
       activeOrder = o;
       activeDay = null;
       g('detail-title').textContent = o.title;
-      g('detail-sub').textContent = `${o.date}　·　打帳者 ${o.op || '—'}`;
+      g('detail-sub').innerHTML = `${o.date}　·　打帳者 ${o.op || '—'}${screenshotLinkHtml_(o)}`;
       renderDetailList();
       g('detail-modal').classList.add('open');
     }
@@ -1178,7 +1187,7 @@
         if (showHeading) {
           const heading = mk('div', 'detail-name');
           heading.style.margin = '14px 0 8px';
-          heading.textContent = `${o.title}　·　打帳者 ${o.op || '—'}`;
+          heading.innerHTML = `${o.title}　·　打帳者 ${o.op || '—'}${screenshotLinkHtml_(o)}`;
           wrap.appendChild(heading);
         }
         o.order.forEach(name => wrap.appendChild(buildPersonItem_(o, name)));
@@ -1509,6 +1518,7 @@
       g('delivery').value    = '0';
       g('discount').value    = '0';
       g('import-hint').style.display = 'none';
+      importedScreenshotLink = '';
       rows = [{ name: '', amt: '' }];
       renderRows();
     }
@@ -1667,6 +1677,7 @@
     }
 
     function applyUberImport(d) {
+      importedScreenshotLink = d.screenshotLink || '';
       const people = d.people || [];
       let unmatched = 0, viaTable = 0;
       rows = people.map(p => {
@@ -1683,13 +1694,14 @@
       g('discount').value = d.discount || 0;
       renderRows();
 
+      const savedNote = importedScreenshotLink ? '截圖已備份，送出後可在明細裡點連結查看。' : '';
       const hint = g('import-hint');
       if (unmatched > 0) {
         hint.className = 'import-hint warn';
-        hint.textContent = `已匯入 ${people.length} 人（${viaTable} 人用姓名對照表自動比對）。其中 ${unmatched} 人找不到對得上的姓名，請往下手動選擇（沒選姓名的話沒辦法送出）。選好後按「送出扣款」，系統會自動記住這次的對應，下次同一個 Uber 名字就會自動比對成功。`;
+        hint.textContent = `已匯入 ${people.length} 人（${viaTable} 人用姓名對照表自動比對）。其中 ${unmatched} 人找不到對得上的姓名，請往下手動選擇（沒選姓名的話沒辦法送出）。選好後按「送出扣款」，系統會自動記住這次的對應，下次同一個 Uber 名字就會自動比對成功。${savedNote}`;
       } else {
         hint.className = 'import-hint';
-        hint.textContent = `已匯入 ${people.length} 人（${viaTable} 人用姓名對照表自動比對），外送費/優惠折扣已自動帶入。請核對品項與金額無誤後再按「送出扣款」。`;
+        hint.textContent = `已匯入 ${people.length} 人（${viaTable} 人用姓名對照表自動比對），外送費/優惠折扣已自動帶入。請核對品項與金額無誤後再按「送出扣款」。${savedNote}`;
       }
     }
 
@@ -1749,19 +1761,19 @@
           const b1 = bal[name];
           bal[name] = Math.round((b1 - deduction) * 100) / 100;
           flowRows.push([title, name, '扣款', amt, delivery, -deduction,
-                         b1, bal[name], op, '', ts, wallet, orderDate]);
+                         b1, bal[name], op, '', ts, wallet, orderDate, importedScreenshotLink]);
 
           /* 2. 服務費扣除 */
           const b2 = bal[name];
           bal[name] = Math.round((b2 - svcFee) * 100) / 100;
           flowRows.push([title, name, '服務費', 0, 0, -svcFee,
-                         b2, bal[name], op, '', ts, wallet, orderDate]);
+                         b2, bal[name], op, '', ts, wallet, orderDate, '']);
 
           /* 3. 服務費儲入打帳者 */
           const b3 = bal[cashier];
           bal[cashier] = Math.round((b3 + svcFee) * 100) / 100;
           flowRows.push([title, cashier, '服務費收入', 0, 0, svcFee,
-                         b3, bal[cashier], op, '', ts, '', orderDate]);
+                         b3, bal[cashier], op, '', ts, '', orderDate, '']);
 
           results.push({ name, deduction, svcFee, newBal: bal[name] });
         }

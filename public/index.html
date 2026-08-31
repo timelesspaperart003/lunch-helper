@@ -669,7 +669,6 @@
               onkeydown="if(event.key==='Enter') handleLogin()">
           </div>
           <button class="submit-btn" onclick="handleLogin()">登入</button>
-          <button class="add-btn" style="margin-top:10px" onclick="handleViewOnly()">👀 只查看（免密碼）</button>
         </div>
       </div>
 
@@ -1008,6 +1007,21 @@
         else if (type === '儲值')                            { p.topup += change; o.hasTopup = true; } // 儲值金額看「變動金額」F 欄
         else if (type === '修改')                            { p.corrections += change; }
       });
+
+      // 一般成員（沒有儲值/輸入訂單任一權限）只能看到自己的明細：
+      // 濾掉沒有自己的訂單，共用訂單裡也只留自己那一筆，看不到別人的金額
+      if (isRestricted_(me)) {
+        Object.keys(ordersByDate).forEach(date => {
+          const mine = ordersByDate[date]
+            .filter(o => o.persons[me.name])
+            .map(o => Object.assign({}, o, {
+              persons: { [me.name]: o.persons[me.name] },
+              order: [me.name]
+            }));
+          if (mine.length) ordersByDate[date] = mine;
+          else delete ordersByDate[date];
+        });
+      }
     }
 
     /* 某人在該訂單目前的「實際扣款」（含修改後） */
@@ -1021,7 +1035,7 @@
       applyTitleVisibility();
       g('cal-av').textContent = me.name[0];
       g('cal-nm').textContent = me.name;
-      g('cal-role-label').textContent = me.readOnly ? '只查看' : '打帳者';
+      g('cal-role-label').textContent = isRestricted_(me) ? '一般成員' : '打帳者';
       const now = new Date();
       calYear = now.getFullYear();
       calMonth = now.getMonth();
@@ -1387,15 +1401,15 @@
           // 本機測試：自動以第一個有密碼的打帳者登入，直接進行事曆
           const cashier = listData.find(r => r[C.NAME] && r[C.PASSWORD]) || listData[0];
           const name = cashier[C.NAME];
-          me = buildMe_(name, rowMap[name], false);
+          me = buildMe_(name, rowMap[name]);
           enterCalendar();
           return;
         }
         const sel = g('login-name');
         sel.innerHTML = '<option value="">請選擇姓名</option>';
-        // 全部人都列出來（免密碼「只查看」用得到），有沒有密碼只影響「登入」按鈕能不能通過
+        // 只列有密碼的人（每個人都應該有自己的密碼才能登入）
         listData.forEach(r => {
-          if (r[C.NAME]) {
+          if (r[C.NAME] && r[C.PASSWORD]) {
             const o = document.createElement('option');
             o.value = o.textContent = r[C.NAME];
             sel.appendChild(o);
@@ -1411,16 +1425,18 @@
     /* 是否有值(V/是/任何非空字串都算有權限)，用來讀「可儲值」「可輸入訂單」這兩欄 */
     function truthy_(v) { return String(v || '').trim() !== ''; }
 
-    function buildMe_(name, entry, readOnly) {
+    function buildMe_(name, entry) {
       return {
         name,
         rowNum: entry.rowNum,
         data: entry.data,
-        readOnly: !!readOnly,
-        canTopup: !readOnly && truthy_(entry.data[C.CAN_TOPUP]),
-        canOrder: !readOnly && truthy_(entry.data[C.CAN_ORDER]),
+        canTopup: truthy_(entry.data[C.CAN_TOPUP]),
+        canOrder: truthy_(entry.data[C.CAN_ORDER]),
       };
     }
+
+    /* 沒有可儲值/可輸入訂單任一權限的人，只是一般成員，只能看自己的明細 */
+    function isRestricted_(person) { return person && !person.canTopup && !person.canOrder; }
 
     function handleLogin() {
       const name = g('login-name').value;
@@ -1435,18 +1451,7 @@
       if (!entry || !savedPwd || String(pwd).trim() !== savedPwd) {
         showE('err-login', '姓名或密碼錯誤'); return;
       }
-      me = buildMe_(name, entry, false);
-      enterCalendar();
-    }
-
-    /* 沒有密碼也能用：選姓名直接進去看行事曆/自己的紀錄，不能儲值也不能輸入訂單 */
-    function handleViewOnly() {
-      const name = g('login-name').value;
-      hideE('err-login');
-      if (!name) { showE('err-login', '請選擇姓名'); return; }
-      const entry = rowMap[name];
-      if (!entry) { showE('err-login', '找不到這個人'); return; }
-      me = buildMe_(name, entry, true);
+      me = buildMe_(name, entry);
       enterCalendar();
     }
 

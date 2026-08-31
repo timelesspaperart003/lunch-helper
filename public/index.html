@@ -1633,9 +1633,10 @@
         const op        = me.name;
         const orderDate = g('order-date').value || today(); // M 欄：打單日期 (YYYY-MM-DD)
 
-        /* find 打帳者（K 欄有值者即為打帳者） */
+        /* find 打帳者（K 欄有值者即為打帳者）；密碼欄位若打成純數字，Sheet 會存成數字型別，
+           所以一律轉字串再比對，避免 .trim() 對數字報錯 */
         const cashierEntry = Object.values(rowMap).find(e =>
-          e.data[C.PASSWORD] && e.data[C.PASSWORD].trim() !== '');
+          String(e.data[C.PASSWORD] || '').trim() !== '');
         if (!cashierEntry)
           throw new Error('找不到打帳者（請確認主名單 K 欄有填入打帳者名稱）');
         const cashier = cashierEntry.data[C.NAME];
@@ -1658,7 +1659,7 @@
           const delShare  = Math.round(delivery / uc * 100) / 100;
           const disShare  = Math.round(discount / uc * 100) / 100;
           const deduction = Math.round((amt - disShare + delShare) * 100) / 100;
-          const isOverdue = (entry.data[C.OVERDUE] || '').trim() === '低額逾期';
+          const isOverdue = String(entry.data[C.OVERDUE] || '').trim() === '低額逾期';
           const svcFee    = isOverdue ? 12 : 2;
           const wallet    = entry.data[C.WALLET] || '';
 

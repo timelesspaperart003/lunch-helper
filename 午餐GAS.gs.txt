@@ -59,6 +59,66 @@ function setupSpreadsheet() {
   Logger.log('接下來請到「主名單表」手動建立初始名單（姓名 + 登入密碼欄填密碼，填了密碼才能登入）');
 }
 
+// 同事那套系統的 GAS 網址，只用來「讀」他的名單，不會寫回去
+const COLLEAGUE_GAS_URL = 'https://script.google.com/macros/s/AKfycbxHHqoEIBDI7YvlJk5kqvKUeE49j2fODvvYd8xZlqn1szll2mw546bJ4UBgU51nv4-0pg/exec';
+
+// 一次性：把同事那套系統的名單（姓名/LINE_ID/餘額/角色/共用錢包歸戶）讀進來，
+// 寫進「自己這份」試算表的主名單表。只呼叫同事 GAS 的 getList（唯讀），完全不會寫回同事那邊。
+// 密碼欄故意留空，不從同事那邊帶密碼過來——兩邊系統獨立，登入密碼分開設定比較安全。
+// 已經存在於自己主名單表的姓名會略過，不覆蓋，保護已經在新系統裡動過的資料。
+// 在 Apps Script 編輯器手動執行一次即可。
+function importFromColleague() {
+  const resp = UrlFetchApp.fetch(COLLEAGUE_GAS_URL + '?action=getList', { muteHttpExceptions: true });
+  if (resp.getResponseCode() !== 200) {
+    Logger.log('讀取同事名單失敗：HTTP ' + resp.getResponseCode() + '：' + resp.getContentText().slice(0, 300));
+    return;
+  }
+
+  var data;
+  try { data = JSON.parse(resp.getContentText()); }
+  catch (e) { Logger.log('同事那邊回傳的內容不是合法 JSON：' + resp.getContentText().slice(0, 300)); return; }
+
+  const rows = data.values || [];
+  if (!rows.length) { Logger.log('同事那邊沒有讀到任何名單資料'); return; }
+
+  const ss = getSS_();
+  const sheet = ss.getSheetByName(MAIN_TAB);
+  const existingNames = {};
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    sheet.getRange(2, 1, lastRow - 1, 1).getValues().forEach(function (r) {
+      if (r[0]) existingNames[r[0]] = true;
+    });
+  }
+
+  const toAdd = [];
+  let skipped = 0;
+  rows.forEach(function (r) {
+    const name = r[0];
+    if (!name) return;
+    if (existingNames[name]) { skipped++; return; }
+    toAdd.push([
+      name,        // 姓名
+      r[1] || '',  // LINE_ID
+      r[2] || 0,   // 餘額（用同事那邊目前的餘額當起點）
+      '',          // 上次通知日
+      '',          // 註冊時間
+      r[5] || '',  // 角色
+      r[6] || '',  // 共用錢包歸戶
+      '',          // 低額逾期狀態
+      '',          // 低額開始日
+      '',          // 最近提醒日
+      ''           // 登入密碼（不匯入，留空，要登入的人自己另外設定）
+    ]);
+  });
+
+  if (toAdd.length) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, toAdd.length, 11).setValues(toAdd);
+  }
+  Logger.log('匯入完成：新增 ' + toAdd.length + ' 人、略過 ' + skipped + ' 人（已存在於主名單表)。' +
+    '密碼欄都是空的，要登入這個新系統的人請自行到主名單表設定密碼。');
+}
+
 function cleanName_(s) {
   return String(s || '').replace(/[.\s]/g, '');
 }

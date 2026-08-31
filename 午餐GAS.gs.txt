@@ -21,7 +21,7 @@
 
 const MAIN_TAB = '主名單表';
 const FLOW_TAB = '金流紀錄表';
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = 'gemini-3.6-flash'; // gemini-2.0-flash 已停用(2026-08 Google API 回應建議改用此型號)
 
 function getSS_() {
   const id = PropertiesService.getScriptProperties().getProperty('SS_ID');

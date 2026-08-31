@@ -1587,11 +1587,14 @@
 
     function applyUberImport(d) {
       const people = d.people || [];
-      let unmatched = 0;
+      let unmatched = 0, viaTable = 0;
       rows = people.map(p => {
-        const matched = matchName(p.ubName, allNames);
-        if (!matched) unmatched++;
-        return { name: matched, amt: String(p.amt) };
+        // 優先用「姓名對照表」裡已經記住的對應，比對不到才用模糊比對猜
+        let name = p.mappedName || '';
+        if (name) viaTable++;
+        else name = matchName(p.ubName, allNames);
+        if (!name) unmatched++;
+        return { name, amt: String(p.amt), ubName: p.ubName };
       });
       if (!rows.length) rows = [{ name: '', amt: '' }];
 
@@ -1602,10 +1605,10 @@
       const hint = g('import-hint');
       if (unmatched > 0) {
         hint.className = 'import-hint warn';
-        hint.textContent = `已匯入 ${people.length} 人，其中 ${unmatched} 人在名單裡找不到對得上的姓名，請往下手動選擇（沒選姓名的話沒辦法送出）。外送費/優惠折扣已自動帶入，送出前請再核對一次金額。`;
+        hint.textContent = `已匯入 ${people.length} 人（${viaTable} 人用姓名對照表自動比對）。其中 ${unmatched} 人找不到對得上的姓名，請往下手動選擇（沒選姓名的話沒辦法送出）。選好後按「送出扣款」，系統會自動記住這次的對應，下次同一個 Uber 名字就會自動比對成功。`;
       } else {
         hint.className = 'import-hint';
-        hint.textContent = `已匯入 ${people.length} 人，外送費/優惠折扣已自動帶入。請核對品項與金額無誤後再按「送出扣款」。`;
+        hint.textContent = `已匯入 ${people.length} 人（${viaTable} 人用姓名對照表自動比對），外送費/優惠折扣已自動帶入。請核對品項與金額無誤後再按「送出扣款」。`;
       }
     }
 
@@ -1685,7 +1688,11 @@
         const balanceUpdates = Object.entries(bal)
           .filter(([n]) => rowMap[n])
           .map(([n, v]) => ({ row: rowMap[n].rowNum, value: v }));
-        await callScript('submit', { flowRows, balanceUpdates });
+        /* 這次匯入時人工確認過的「Uber名字→主名單表姓名」對應，記回姓名對照表，下次自動比對用 */
+        const nameMapAdds = rows
+          .filter(r => r.ubName && r.name)
+          .map(r => ({ ubName: r.ubName, realName: r.name }));
+        await callScript('submit', { flowRows, balanceUpdates, nameMapAdds });
 
         unload();
         showResults();

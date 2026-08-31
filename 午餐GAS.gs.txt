@@ -21,6 +21,7 @@
 
 const MAIN_TAB = '主名單表';
 const FLOW_TAB = '金流紀錄表';
+const NAME_MAP_TAB = '姓名對照表'; // Uber顯示名稱 → 主名單表姓名，第一次用時會自動建立
 const GEMINI_MODEL = 'gemini-3.6-flash'; // gemini-2.0-flash 已停用(2026-08 Google API 回應建議改用此型號)
 
 function getSS_() {
@@ -56,6 +57,34 @@ function setupSpreadsheet() {
   props.setProperty('SS_ID', ss.getId());
   Logger.log('新試算表已建立：' + ss.getUrl());
   Logger.log('接下來請到「主名單表」手動建立初始名單（姓名 + 登入密碼欄填密碼，填了密碼才能登入）');
+}
+
+function cleanName_(s) {
+  return String(s || '').replace(/[.\s]/g, '');
+}
+
+// 讀「姓名對照表」，回傳 { 清洗過的Uber名字: 主名單表姓名 }；分頁不存在就回空物件
+function getNameMap_(ss) {
+  const sheet = ss.getSheetByName(NAME_MAP_TAB);
+  const map = {};
+  if (!sheet) return map;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return map;
+  const data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  data.forEach(function (row) {
+    const ub = cleanName_(row[0]);
+    if (ub && row[1]) map[ub] = row[1]; // 同一個 Uber 名字有多筆對應時，後面的蓋過前面的
+  });
+  return map;
+}
+
+function getOrCreateNameMapSheet_(ss) {
+  let sheet = ss.getSheetByName(NAME_MAP_TAB);
+  if (!sheet) {
+    sheet = ss.insertSheet(NAME_MAP_TAB);
+    sheet.getRange(1, 1, 1, 2).setValues([['Uber顯示名稱', '對照姓名']]);
+  }
+  return sheet;
 }
 
 function doGet(e) {
@@ -99,6 +128,14 @@ function doGet(e) {
         payload.balanceUpdates.forEach(function (u) {
           mainSheet.getRange(u.row, 3).setValue(u.value);
         });
+
+        // 把這次匯入時人工確認過的「Uber名字→主名單表姓名」記下來，下次自動比對用
+        const adds = payload.nameMapAdds;
+        if (adds && adds.length) {
+          const mapSheet = getOrCreateNameMapSheet_(ss);
+          const rows = adds.map(function (x) { return [x.ubName, x.realName]; });
+          mapSheet.getRange(mapSheet.getLastRow() + 1, 1, rows.length, 2).setValues(rows);
+        }
       } finally {
         lock.releaseLock();
       }
@@ -116,7 +153,8 @@ function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     if (body.action === 'parseUberOrder') {
-      return respond_(parseUberOrder_(body.images || []));
+      const ss = getSS_();
+      return respond_(parseUberOrder_(body.images || [], getNameMap_(ss)));
     }
     return respond_({ ok: false, error: 'unknown action: ' + body.action });
   } catch (err) {
@@ -124,7 +162,7 @@ function doPost(e) {
   }
 }
 
-function parseUberOrder_(images) {
+function parseUberOrder_(images, nameMap) {
   const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!apiKey) return { ok: false, error: 'GEMINI_API_KEY 尚未設定（去 Script Properties 加一組）' };
   if (!images.length) return { ok: false, error: '沒有收到圖片' };
@@ -172,7 +210,13 @@ function parseUberOrder_(images) {
   const discount = round2_(parsed.discount || 0);
   const people = (parsed.people || [])
     .filter(function (p) { return p.name && p.amt; })
-    .map(function (p) { return { ubName: p.name, amt: round2_(p.amt) }; });
+    .map(function (p) {
+      return {
+        ubName: p.name,
+        amt: round2_(p.amt),
+        mappedName: (nameMap && nameMap[cleanName_(p.name)]) || ''
+      };
+    });
 
   return {
     ok: true,

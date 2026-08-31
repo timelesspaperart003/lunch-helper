@@ -735,6 +735,10 @@
         <select id="topup-name"><option value="">請選擇姓名</option></select>
       </div>
       <div class="field">
+        <label>日期</label>
+        <input type="date" id="topup-date">
+      </div>
+      <div class="field">
         <label>儲值金額（元）</label>
         <input type="number" id="topup-amt" min="0" placeholder="金額">
       </div>
@@ -1264,6 +1268,7 @@
         o.value = o.textContent = n;
         sel.appendChild(o);
       });
+      g('topup-date').value = today();
       g('topup-amt').value = '';
       g('topup-note').value = '';
       hideE('err-topup');
@@ -1276,6 +1281,7 @@
 
     async function submitTopup() {
       const name = g('topup-name').value;
+      const date = g('topup-date').value || today();
       const amt  = parseFloat(g('topup-amt').value);
       const note = g('topup-note').value.trim();
       hideE('err-topup');
@@ -1292,12 +1298,12 @@
         const balAfter  = round2(balBefore + amt);
         const ts        = new Date().toLocaleString('zh-TW');
         const wallet    = entry.data[C.WALLET] || '';
-        const d         = new Date();
-        const title     = `${d.getMonth() + 1}/${d.getDate()} 儲值`;
+        const [, mo, da] = date.split('-');
+        const title      = `${parseInt(mo, 10)}/${parseInt(da, 10)} 儲值`;
 
         const flowRows = [[
           title, name, '儲值', 0, 0, amt,
-          balBefore, balAfter, me.name, note, ts, wallet, today()
+          balBefore, balAfter, me.name, note, ts, wallet, date
         ]];
         const balanceUpdates = [{ row: entry.rowNum, value: balAfter }];
 

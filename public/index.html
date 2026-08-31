@@ -491,7 +491,7 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       transition: filter .15s, transform .15s;
     }
-    .cal-event:nth-child(2n) { background: var(--secondary); }
+    .cal-event.ev-expense { background: var(--secondary); } /* 支出(扣款)訂單=咖啡色，儲值沿用預設綠色 */
     .cal-event:hover { filter: brightness(1.08); transform: translateX(1px); }
     .cal-dot { display: none; }
 
@@ -992,7 +992,7 @@
         const key = date + '||' + base;
         let o = map[key];
         if (!o) {
-          o = map[key] = { key, date, title: base, op: row[F.OP] || '', persons: {}, order: [] };
+          o = map[key] = { key, date, title: base, op: row[F.OP] || '', persons: {}, order: [], hasDeduction: false, hasTopup: false };
           (ordersByDate[date] = ordersByDate[date] || []).push(o);
         }
         const type = (row[F.TYPE] || '') + '';
@@ -1003,9 +1003,9 @@
         let p = o.persons[name];
         if (!p) { p = o.persons[name] = { name, deduction: 0, svcFee: 0, corrections: 0, amt: 0, topup: 0 }; o.order.push(name); }
         // 同時支援真實格式（服務費扣款/儲值）與舊格式（服務費）
-        if (type === '扣款')                                { p.deduction += -change; p.amt += parseFloat(row[F.AMT]) || 0; }
+        if (type === '扣款')                                { p.deduction += -change; p.amt += parseFloat(row[F.AMT]) || 0; o.hasDeduction = true; }
         else if (type === '服務費' || type === '服務費扣款') { p.svcFee += -change; }
-        else if (type === '儲值')                            { p.topup += change; } // 儲值金額看「變動金額」F 欄
+        else if (type === '儲值')                            { p.topup += change; o.hasTopup = true; } // 儲值金額看「變動金額」F 欄
         else if (type === '修改')                            { p.corrections += change; }
       });
     }
@@ -1077,7 +1077,7 @@
           cell.classList.add('has-orders');
           const list = mk('div', 'cal-events');
           orders.forEach(o => {
-            const ev = mk('button', 'cal-event');
+            const ev = mk('button', 'cal-event ' + (o.hasDeduction ? 'ev-expense' : (o.hasTopup ? 'ev-topup' : '')));
             ev.textContent = o.title;
             ev.title = o.title;
             ev.onclick = () => openOrderDetail(o.key);

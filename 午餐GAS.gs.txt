@@ -324,7 +324,10 @@ function callGeminiForOrder_(parts, nameMap) {
 
   // 503(伺服器忙)/429(超過速率限制) 是暫時性問題，重試幾次通常就過了，不用讓使用者手動重試
   let resp;
-  const retryDelays = [2000, 4000, 8000, 15000, 20000]; // 撐過持續性尖峰用，總共最多再等約49秒
+  // 只在 GAS 內部小重試一下就好，不要撐太久——Worker 打 GAS 這段是 Cloudflare 的 subrequest，
+  // 撐太久(之前設到快49秒)反而會被 Cloudflare 自己判定逾時、回 524，比不重試更難查。
+  // 真正撐過持續性尖峰的重試交給前端做「整個請求重打」，見 public/index.html 的 fetchWithRetry_。
+  const retryDelays = [1500, 3000];
   for (let attempt = 0; ; attempt++) {
     resp = UrlFetchApp.fetch(url, {
       method: 'post',

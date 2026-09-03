@@ -1878,6 +1878,32 @@
       });
     }
 
+    /* Gemini 偶爾會忙碌(503)，GAS 那邊只小重試一下就好(不然單一請求撐太久會被 Cloudflare
+       自己判定逾時、回 524，反而更難查)。真正撐過持續性尖峰改成這裡整個請求重打幾次。 */
+    async function fetchOrderParse_(url, body, hint, label) {
+      const delays = [3000, 6000]; // 第2、3次嘗試前各等這麼久
+      let lastErr;
+      for (let attempt = 1; attempt <= delays.length + 1; attempt++) {
+        if (attempt > 1) {
+          hint.textContent = `${label}（伺服器忙，第 ${attempt}/${delays.length + 1} 次嘗試中...）`;
+          await new Promise(res => setTimeout(res, delays[attempt - 2]));
+        }
+        try {
+          const r = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+          const d = await r.json();
+          if (!d.ok) throw new Error((d.error || '辨識失敗') + (d.detail ? '：' + d.detail : ''));
+          return d;
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      throw lastErr;
+    }
+
     async function handleUberFiles(fileList) {
       const files = Array.from(fileList || []);
       g('uber-file-input').value = ''; // 讓同一批檔案可以再選一次
@@ -1886,21 +1912,16 @@
       const hint = g('import-hint');
       hint.className = 'import-hint';
       hint.style.display = 'block';
-      hint.textContent = `辨識中...（${files.length} 張截圖）`;
+      const label = `辨識中...（${files.length} 張截圖）`;
+      hint.textContent = label;
 
       try {
         const images = await Promise.all(files.map(resizeImageFile));
-        const r = await fetch('/api/parse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ images })
-        });
-        const d = await r.json();
-        if (!d.ok) throw new Error((d.error || '辨識失敗') + (d.detail ? '：' + d.detail : ''));
+        const d = await fetchOrderParse_('/api/parse', { images }, hint, label);
         applyUberImport(d);
       } catch (e) {
         hint.className = 'import-hint warn';
-        hint.textContent = '匯入失敗：' + e.message + '（可以重新截圖再試一次，或直接手動輸入）';
+        hint.textContent = '匯入失敗：' + e.message + '（已自動重試幾次仍失敗，可以重新截圖再試一次，或直接手動輸入）';
       }
     }
 
@@ -1916,22 +1937,17 @@
       const hint = g('import-hint');
       hint.className = 'import-hint';
       hint.style.display = 'block';
-      hint.textContent = '辨識中...';
+      const label = '辨識中...';
+      hint.textContent = label;
 
       try {
-        const r = await fetch('/api/parse-text', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text })
-        });
-        const d = await r.json();
-        if (!d.ok) throw new Error((d.error || '辨識失敗') + (d.detail ? '：' + d.detail : ''));
+        const d = await fetchOrderParse_('/api/parse-text', { text }, hint, label);
         applyUberImport(d);
         g('text-order-input').value = '';
         g('text-order-box').style.display = 'none';
       } catch (e) {
         hint.className = 'import-hint warn';
-        hint.textContent = '解析失敗：' + e.message + '（可以修改文字再試一次，或直接手動輸入）';
+        hint.textContent = '解析失敗：' + e.message + '（已自動重試幾次仍失敗，可以修改文字再試一次，或直接手動輸入）';
       }
     }
 

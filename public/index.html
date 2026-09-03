@@ -876,6 +876,7 @@
         <button class="modal-close" onclick="closeDetail()">✕</button>
       </div>
       <div class="modal-sub" id="detail-sub"></div>
+      <div id="detail-actions" style="margin-bottom:10px;"></div>
       <div id="detail-list"></div>
     </div>
   </div>
@@ -1174,6 +1175,17 @@
       return ` ・ <a href="${first}" target="_blank" rel="noopener" style="color:var(--primary);font-weight:700;">📷 查看截圖</a>`;
     }
 
+    /* 訂單是扣款/儲值哪一種，決定整單刪除要檢查哪個權限 */
+    function canDeleteWholeOrder_(o) {
+      if (!me) return false;
+      const isTopupOrder = o.hasTopup && !o.hasDeduction;
+      return isTopupOrder ? !!me.canTopup : !!me.canOrder;
+    }
+    function wholeOrderDeleteBtnHtml_(o) {
+      if (!canDeleteWholeOrder_(o)) return '';
+      return ` <button class="del-mini-btn" onclick="deleteWholeOrder('${jsName(o.key)}')">整單刪除</button>`;
+    }
+
     function openOrderDetail(key) {
       const o = findOrder(key);
       if (!o) return;
@@ -1181,6 +1193,7 @@
       activeDay = null;
       g('detail-title').textContent = o.title;
       g('detail-sub').innerHTML = `${o.date}　·　打帳者 ${o.op || '—'}${screenshotLinkHtml_(o)}`;
+      g('detail-actions').innerHTML = wholeOrderDeleteBtnHtml_(o);
       renderDetailList();
       g('detail-modal').classList.add('open');
     }
@@ -1193,6 +1206,7 @@
       activeDay = dateKey;
       g('detail-title').textContent = dateKey;
       g('detail-sub').textContent = `共 ${orders.length} 筆紀錄`;
+      g('detail-actions').innerHTML = '';
       renderDetailList();
       g('detail-modal').classList.add('open');
     }
@@ -1206,7 +1220,7 @@
         if (showHeading) {
           const heading = mk('div', 'detail-name');
           heading.style.margin = '14px 0 8px';
-          heading.innerHTML = `${o.title}　·　打帳者 ${o.op || '—'}${screenshotLinkHtml_(o)}`;
+          heading.innerHTML = `${o.title}　·　打帳者 ${o.op || '—'}${screenshotLinkHtml_(o)}${wholeOrderDeleteBtnHtml_(o)}`;
           wrap.appendChild(heading);
         }
         o.order.forEach(name => wrap.appendChild(buildPersonItem_(o, name)));
@@ -1458,6 +1472,93 @@
       } catch (e) {
         unload();
         alert('刪除失敗：' + e.message);
+      }
+    }
+
+    /* 整單刪除：把訂單裡每個人要退回的錢一次算完，合成一次 submit 送出，
+       不像一個一個刪那樣每刪一筆都要重讀餘額+重整行事曆，人多的訂單才不會等很久。 */
+    async function deleteWholeOrder(orderKey) {
+      const o = findOrder(orderKey);
+      if (!o) { alert('找不到這筆訂單，可能剛好被重新整理了，請重新開啟'); return; }
+      if (!canDeleteWholeOrder_(o)) { alert('沒有刪除權限'); return; }
+
+      const isTopupOrder = o.hasTopup && !o.hasDeduction;
+      const names = o.order.slice();
+      if (!names.length) { alert('這筆訂單沒有明細可以刪除'); return; }
+      if (!confirm(`確定要整單刪除「${o.title}」嗎？\n共 ${names.length} 人的紀錄都會退回，這個動作沒辦法復原（但會留下抵銷紀錄可以查）。`)) return;
+
+      try {
+        loading('讀取最新餘額...');
+        await loadList();
+
+        const ts = new Date().toLocaleString('zh-TW');
+        const cashierName = o.svcIncomeName || '';
+        const flowRows = [];
+        const bal = {}; // 姓名 → 目前算到的餘額，整單一次累加完再一起送出
+
+        function getBal(n) {
+          if (!(n in bal)) {
+            const e = rowMap[n];
+            bal[n] = e ? (parseFloat(e.data[C.BALANCE]) || 0) : 0;
+          }
+          return bal[n];
+        }
+
+        names.forEach(name => {
+          if (!rowMap[name]) return; // 主名單找不到這個人就跳過，不要整單中斷
+          const p = o.persons[name];
+          const wallet = rowMap[name].data[C.WALLET] || '';
+
+          if (isTopupOrder) {
+            const amt = round2(p.topup);
+            if (Math.abs(amt) > 0.001) {
+              const b0 = getBal(name);
+              bal[name] = round2(b0 - amt);
+              flowRows.push([o.title, name, '儲值', 0, 0, -amt, b0, bal[name], me.name, '整單刪除', ts, wallet, o.date]);
+            }
+            return;
+          }
+
+          const eff = effDeduction(p);
+          const svcFee = round2(p.svcFee);
+          if (Math.abs(eff) > 0.001) {
+            const b0 = getBal(name);
+            bal[name] = round2(b0 + eff);
+            flowRows.push([o.title, name, '修改', 0, 0, eff, b0, bal[name], me.name, '整單刪除，退回扣款', ts, wallet, o.date]);
+          }
+          if (Math.abs(svcFee) > 0.001) {
+            const b0 = getBal(name);
+            bal[name] = round2(b0 + svcFee);
+            flowRows.push([o.title, name, '服務費', 0, 0, svcFee, b0, bal[name], me.name, '整單刪除，退回服務費', ts, wallet, o.date]);
+
+            if (cashierName) {
+              const cb0 = getBal(cashierName);
+              bal[cashierName] = round2(cb0 - svcFee);
+              flowRows.push([o.title, cashierName, '服務費收入', 0, 0, -svcFee, cb0, bal[cashierName], me.name, `整單刪除，收回${name}那筆的服務費收入`, ts, '', o.date]);
+            }
+          }
+        });
+
+        if (!flowRows.length) { unload(); alert('這筆訂單金額都是 0，沒有需要刪除的內容'); return; }
+
+        const balanceUpdates = Object.keys(bal)
+          .filter(n => rowMap[n])
+          .map(n => ({ row: rowMap[n].rowNum, value: bal[n] }));
+
+        loading(`寫入刪除（${names.length} 人）...`);
+        await callScript('submit', { flowRows, balanceUpdates });
+
+        loading('重新整理...');
+        await loadFlow();
+        buildOrders();
+        unload();
+        renderCalendar();
+
+        if (activeDay) { renderDetailList(); }
+        else { closeDetail(); }
+      } catch (e) {
+        unload();
+        alert('整單刪除失敗：' + e.message);
       }
     }
 

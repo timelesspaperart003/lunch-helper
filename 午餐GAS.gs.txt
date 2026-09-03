@@ -324,7 +324,7 @@ function callGeminiForOrder_(parts, nameMap) {
 
   // 503(伺服器忙)/429(超過速率限制) 是暫時性問題，重試幾次通常就過了，不用讓使用者手動重試
   let resp;
-  const retryDelays = [1500, 3000, 6000];
+  const retryDelays = [2000, 4000, 8000, 15000, 20000]; // 撐過持續性尖峰用，總共最多再等約49秒
   for (let attempt = 0; ; attempt++) {
     resp = UrlFetchApp.fetch(url, {
       method: 'post',

@@ -1240,12 +1240,14 @@
 
       const canEdit = me && me.canOrder;
       const item = mk('div', 'detail-item');
+      const total = round2(eff + p.svcFee);
       const figs = `
         <div class="detail-figs">
           <span>訂單金額 <strong>${round2(p.amt)} 元</strong></span>
+          <span>訂單扣款 <strong>${eff} 元</strong></span>
           <span>服務費 <strong>${round2(p.svcFee)} 元</strong></span>
-          <span class="fig-eff">實際扣款 <strong>${eff} 元</strong></span>
-          ${edited ? `<span class="fig-edited">✎ 已修改（原 ${round2(p.deduction)}）</span>` : ''}
+          <span class="fig-eff">本筆合計 <strong>${total} 元</strong></span>
+          ${edited ? `<span class="fig-edited">✎ 訂單扣款已修改（原 ${round2(p.deduction)}）</span>` : ''}
         </div>`;
       item.innerHTML = `
         <div class="detail-top">

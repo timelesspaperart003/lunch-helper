@@ -1022,9 +1022,14 @@
     }
     /* 解析標題開頭的 YY/M/D（年份補成 20YY）。解析不出來回 null。
        例：25/12/3-1飲料 → 2025-12-03（-1 是同日序號，忽略）；標題「1」→ null。 */
+    /* 標題開頭日期，支援斜線或點分隔、2位數或4位數年份：
+       25/11/27午餐、2026.08.28午餐、26.8.5-1飲料 都認得出來 */
     function titleDate(title) {
-      const m = String(title || '').match(/^(\d{2})\/(\d{1,2})\/(\d{1,2})/);
-      return m ? `20${m[1]}-${pad(+m[2])}-${pad(+m[3])}` : null;
+      const m = String(title || '').match(/^(\d{2,4})[./](\d{1,2})[./](\d{1,2})/);
+      if (!m) return null;
+      let y = +m[1];
+      if (y < 100) y += 2000;
+      return `${y}-${pad(+m[2])}-${pad(+m[3])}`;
     }
     function normDate(s) {
       if (s === undefined || s === null) return null;

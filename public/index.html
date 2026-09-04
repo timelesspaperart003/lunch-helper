@@ -492,6 +492,7 @@
       transition: filter .15s, transform .15s;
     }
     .cal-event.ev-expense { background: var(--secondary); } /* 支出(扣款)訂單=咖啡色，儲值沿用預設綠色 */
+    .cal-event.ev-wallet { background: #c98a3a; } /* 錢包紀錄，只有可管理錢包的人看得到 */
     .cal-event:hover { filter: brightness(1.08); transform: translateX(1px); }
     .cal-dot { display: none; }
 
@@ -971,6 +972,8 @@
     let activeDay    = null;  // 目前展開中的日期字串（整天檢視用，跟 activeOrder 二選一）
     let walletBalances = {}; // { 粉紅包: 餘額, 小黃包: 餘額 }
     let walletLedger   = []; // 錢包紀錄表原始列，最新的在最後面
+    let walletEventsByDate = {}; // 'YYYY-MM-DD' → [錢包紀錄列]，只有可管理錢包的人才會載入/顯示
+    let walletFilter = 'all'; // 'all' | 粉紅包 | 小黃包，錢包管理面板的篩選狀態
 
     /* ============================================================
        APPS SCRIPT API helper
@@ -1124,6 +1127,12 @@
         loading('讀取帳目...');
         await loadFlow();
         buildOrders();
+        if (me && me.canWallet) {
+          await loadWallets();
+          buildWalletEvents();
+        } else {
+          walletEventsByDate = {};
+        }
         unload();
         renderCalendar();
       } catch (e) {
@@ -1131,6 +1140,16 @@
         alert('讀取帳目失敗：' + e.message);
         renderCalendar();
       }
+    }
+
+    /* 把錢包紀錄表也按日期分組，讓有錢包權限的人在行事曆上也看得到（一般成員不會載入這個，不會被洗版） */
+    function buildWalletEvents() {
+      walletEventsByDate = {};
+      walletLedger.forEach(row => {
+        const date = normDate(row[0]); // 時間戳記
+        if (!date) return;
+        (walletEventsByDate[date] = walletEventsByDate[date] || []).push(row);
+      });
     }
 
     function backToCalendar() {
@@ -1163,20 +1182,33 @@
         cell.appendChild(num);
 
         const orders = ordersByDate[key] || [];
-        if (orders.length) {
+        const walletEvents = (me && me.canWallet) ? (walletEventsByDate[key] || []) : [];
+        if (orders.length || walletEvents.length) {
           monthHasOrders = true;
           cell.classList.add('has-orders');
-          num.style.cursor = 'pointer';
-          num.title = '看這天全部的紀錄';
-          num.onclick = () => openDayDetail(key);
           const list = mk('div', 'cal-events');
-          orders.forEach(o => {
-            const ev = mk('button', 'cal-event ' + (o.hasDeduction ? 'ev-expense' : (o.hasTopup ? 'ev-topup' : '')));
-            ev.textContent = o.title;
-            ev.title = o.title;
-            ev.onclick = () => openOrderDetail(o.key);
+
+          if (orders.length) {
+            num.style.cursor = 'pointer';
+            num.title = '看這天全部的紀錄';
+            num.onclick = () => openDayDetail(key);
+            orders.forEach(o => {
+              const ev = mk('button', 'cal-event ' + (o.hasDeduction ? 'ev-expense' : (o.hasTopup ? 'ev-topup' : '')));
+              ev.textContent = o.title;
+              ev.title = o.title;
+              ev.onclick = () => openOrderDetail(o.key);
+              list.appendChild(ev);
+            });
+          }
+
+          if (walletEvents.length) {
+            const ev = mk('button', 'cal-event ev-wallet');
+            ev.textContent = `🏦 錢包 x${walletEvents.length}`;
+            ev.title = walletEvents.map(r => `${r[1]}｜${r[2]} ${r[3]}元`).join('\n');
+            ev.onclick = () => openWalletManager();
             list.appendChild(ev);
-          });
+          }
+
           cell.appendChild(list);
         }
         grid.appendChild(cell);
@@ -1734,13 +1766,36 @@
       g('wallet-modal').classList.remove('open');
     }
 
+    function setWalletFilter(f) {
+      walletFilter = f;
+      renderWalletManager();
+    }
+
+    function renderWalletFilterChips_() {
+      const wrap = g('wallet-filter');
+      wrap.innerHTML = '';
+      [['all', '全部'], [WALLET_PINK, '🌸 粉紅包'], [WALLET_YELLOW, '💛 小黃包']].forEach(([val, label]) => {
+        const btn = mk('button', 'cal-today-btn');
+        btn.textContent = label;
+        if (walletFilter === val) {
+          btn.style.background = 'var(--primary)';
+          btn.style.color = 'var(--primary-fg)';
+          btn.style.borderColor = 'var(--primary)';
+        }
+        btn.onclick = () => setWalletFilter(val);
+        wrap.appendChild(btn);
+      });
+    }
+
     function renderWalletManager() {
       g('wallet-pink-bal').textContent   = round2(walletBalances[WALLET_PINK] || 0) + ' 元';
       g('wallet-yellow-bal').textContent = round2(walletBalances[WALLET_YELLOW] || 0) + ' 元';
+      renderWalletFilterChips_();
 
       const list = g('wallet-ledger-list');
       list.innerHTML = '';
-      const recent = walletLedger.slice(-15).reverse(); // 最新的在最上面，只看最近15筆
+      const filtered = walletFilter === 'all' ? walletLedger : walletLedger.filter(r => r[1] === walletFilter);
+      const recent = filtered.slice(-15).reverse(); // 最新的在最上面，只看（篩選後）最近15筆
       if (!recent.length) {
         list.innerHTML = '<div class="import-hint">還沒有任何錢包紀錄</div>';
         return;

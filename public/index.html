@@ -974,6 +974,7 @@
     let walletLedger   = []; // 錢包紀錄表原始列，最新的在最後面
     let walletEventsByDate = {}; // 'YYYY-MM-DD' → [錢包紀錄列]，只有可管理錢包的人才會載入/顯示
     let walletFilter = 'all'; // 'all' | 粉紅包 | 小黃包，錢包管理面板的篩選狀態
+    let walletDayFilter = null; // 從行事曆點特定日期進來時設成 'YYYY-MM-DD'，只看那天；一般開啟(FAB按鈕)是 null，看全部日期
 
     /* ============================================================
        APPS SCRIPT API helper
@@ -1223,7 +1224,7 @@
             const ev = mk('button', 'cal-event ev-wallet-yellow');
             ev.textContent = '💛 小黃包';
             ev.title = yellowRows.map(r => `${r[2]} ${r[3]}元`).join('\n');
-            ev.onclick = () => openWalletManager();
+            ev.onclick = () => openWalletManager(key);
             list.appendChild(ev);
           }
 
@@ -1763,8 +1764,9 @@
     /* ============================================================
        錢包管理（粉紅包/小黃包）
     ============================================================ */
-    async function openWalletManager() {
+    async function openWalletManager(dateKey) {
       if (!me || !me.canWallet) { alert('沒有錢包管理權限'); return; }
+      walletDayFilter = dateKey || null;
       g('wallet-transfer-amt').value = '';
       g('wallet-transfer-note').value = '';
       hideE('err-wallet');
@@ -1805,6 +1807,11 @@
       });
     }
 
+    function clearWalletDayFilter() {
+      walletDayFilter = null;
+      renderWalletManager();
+    }
+
     function renderWalletManager() {
       g('wallet-pink-bal').textContent   = round2(walletBalances[WALLET_PINK] || 0) + ' 元';
       g('wallet-yellow-bal').textContent = round2(walletBalances[WALLET_YELLOW] || 0) + ' 元';
@@ -1812,10 +1819,21 @@
 
       const list = g('wallet-ledger-list');
       list.innerHTML = '';
-      const filtered = walletFilter === 'all' ? walletLedger : walletLedger.filter(r => r[1] === walletFilter);
+
+      let filtered = walletFilter === 'all' ? walletLedger : walletLedger.filter(r => r[1] === walletFilter);
+      if (walletDayFilter) {
+        filtered = filtered.filter(r => normDate(r[0]) === walletDayFilter);
+        const dayHint = mk('div', 'import-hint');
+        dayHint.innerHTML = `只顯示 <strong>${walletDayFilter}</strong> 這天的紀錄　` +
+          `<a href="#" onclick="clearWalletDayFilter(); return false;" style="color:var(--primary);font-weight:700;">看全部日期</a>`;
+        list.appendChild(dayHint);
+      }
+
       const recent = filtered.slice(-15).reverse(); // 最新的在最上面，只看（篩選後）最近15筆
       if (!recent.length) {
-        list.innerHTML = '<div class="import-hint">還沒有任何錢包紀錄</div>';
+        const empty = mk('div', 'import-hint');
+        empty.textContent = '這個範圍沒有任何錢包紀錄';
+        list.appendChild(empty);
         return;
       }
       recent.forEach(row => {

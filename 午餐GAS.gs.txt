@@ -127,13 +127,14 @@ function addWalletFeature() {
 const COLLEAGUE_GAS_URL = 'https://script.google.com/macros/s/AKfycbxHHqoEIBDI7YvlJk5kqvKUeE49j2fODvvYd8xZlqn1szll2mw546bJ4UBgU51nv4-0pg/exec';
 
 // 一次性：從同事那套系統匯入資料到「自己這份」試算表。只呼叫同事 GAS 的 getList/getFlow（唯讀），
-// 完全不會寫回同事那邊。在 Apps Script 編輯器手動執行一次即可。
+// 完全不會寫回同事那邊。可以手動執行，也可以用 setupDailySync() 排程每天自動跑，兩種情況共用這個函式，
+// 邏輯設計成每次執行都是「只補上新的部分」，重複執行/每天執行都安全，不用先清空重來。
 //   1. 主名單表：同事有、自己沒有的人 → 新增；名字已經存在的人 → 只更新餘額(密碼/其他欄位不動)。
-//      這部分可以重複執行，每次都會把餘額同步成同事那邊最新的數字。
-//   2. 金流紀錄表：把同事的消費/儲值歷史記錄整批複製過來，讓行事曆看得到過去的紀錄。
-//      這部分只在自己的金流紀錄表還是空的時候做一次，避免重複執行造成同一筆紀錄被複製兩份。
+//   2. 金流紀錄表：用 Script Properties 記「上次同步到同事那邊第幾筆」，每次只補上新增的部分，
+//      不會重複匯入已經拉過的舊紀錄。
 function importFromColleague() {
   const ss = getSS_();
+  const props = PropertiesService.getScriptProperties();
 
   // ---- 1. 主名單表：新增缺的人、同步已存在的人的餘額 ----
   const listResp = UrlFetchApp.fetch(COLLEAGUE_GAS_URL + '?action=getList', { muteHttpExceptions: true });
@@ -177,14 +178,7 @@ function importFromColleague() {
   }
   Logger.log('主名單表：新增 ' + added + ' 人、同步餘額 ' + updated + ' 人。密碼欄不會從同事那邊帶過來，要登入的人請自行設定密碼。');
 
-  // ---- 2. 金流紀錄表：只在自己這邊還是空的時候整批匯入，避免重複匯入 ----
-  const flowSheet = ss.getSheetByName(FLOW_TAB);
-  if (flowSheet.getLastRow() >= 2) {
-    Logger.log('金流紀錄表已經有資料了，這次不會再匯入同事的消費/儲值歷史（避免重複）。' +
-      '如果真的要重新匯入，請先手動清空金流紀錄表內容（保留表頭）再重新執行這個函式。');
-    return;
-  }
-
+  // ---- 2. 金流紀錄表：只補上「比上次同步時多出來的」新紀錄 ----
   const flowResp = UrlFetchApp.fetch(COLLEAGUE_GAS_URL + '?action=getFlow', { muteHttpExceptions: true });
   if (flowResp.getResponseCode() !== 200) {
     Logger.log('讀取同事消費紀錄失敗：HTTP ' + flowResp.getResponseCode() + '：' + flowResp.getContentText().slice(0, 300));
@@ -193,18 +187,70 @@ function importFromColleague() {
   var flowData;
   try { flowData = JSON.parse(flowResp.getContentText()); }
   catch (e) { Logger.log('同事消費紀錄回傳的內容不是合法 JSON：' + flowResp.getContentText().slice(0, 300)); return; }
-  const flowRows = flowData.values || [];
-  if (!flowRows.length) { Logger.log('同事那邊沒有消費/儲值紀錄可以匯入'); return; }
+  const allFlowRows = flowData.values || [];
 
-  // 同事 getFlow 回的是顯示文字(getDisplayValues)，補齊/裁到 14 欄避免欄數不一致寫入失敗
-  // (同事那邊沒有「截圖連結」這欄，補空白就好)
-  const normalized = flowRows.map(function (r) {
-    const row = r.slice(0, 14);
-    while (row.length < 14) row.push('');
-    return row;
+  const syncedCount = parseInt(props.getProperty('COLLEAGUE_FLOW_SYNCED_COUNT') || '0', 10);
+  const newFlowRows = allFlowRows.slice(syncedCount); // 同事那邊是往下 append，前面同步過的不會變動，只補後面新的
+
+  if (!newFlowRows.length) {
+    Logger.log('金流紀錄表：沒有新的消費/儲值紀錄，不用同步（同事那邊目前共 ' + allFlowRows.length + ' 筆，已經都同步過了）。');
+  } else {
+    // 同事 getFlow 回的是顯示文字(getDisplayValues)，補齊/裁到 14 欄避免欄數不一致寫入失敗
+    // (同事那邊沒有「截圖連結」這欄，補空白就好)
+    const normalized = newFlowRows.map(function (r) {
+      const row = r.slice(0, 14);
+      while (row.length < 14) row.push('');
+      return row;
+    });
+    const flowSheet = ss.getSheetByName(FLOW_TAB);
+    flowSheet.getRange(flowSheet.getLastRow() + 1, 1, normalized.length, 14).setValues(normalized);
+    Logger.log('金流紀錄表：補上了 ' + normalized.length + ' 筆同事那邊新增的消費/儲值紀錄。');
+  }
+  props.setProperty('COLLEAGUE_FLOW_SYNCED_COUNT', String(allFlowRows.length));
+}
+
+// 設定每天自動執行 importFromColleague()，在真正切換過去同事系統前都可以開著，
+// 不用每天手動點。在 Apps Script 編輯器手動執行一次即可，重複執行不會建立重複的排程。
+function setupDailySync() {
+  const already = ScriptApp.getProjectTriggers().some(function (t) {
+    return t.getHandlerFunction() === 'importFromColleague';
   });
-  flowSheet.getRange(flowSheet.getLastRow() + 1, 1, normalized.length, 14).setValues(normalized);
-  Logger.log('金流紀錄表：匯入了同事那邊 ' + normalized.length + ' 筆歷史消費/儲值紀錄。');
+  if (already) {
+    Logger.log('已經有每天同步的排程了，不用重複設定。要看/移除請執行 removeDailySync()。');
+    return;
+  }
+  ScriptApp.newTrigger('importFromColleague').timeBased().everyDays(1).atHour(3).create();
+  Logger.log('已設定每天凌晨3點左右自動同步同事那邊的名單/消費紀錄。真正切換過去、不需要再同步之後，執行 removeDailySync() 關掉。');
+}
+
+// 移除 setupDailySync() 建立的每天自動同步排程（真正切換過去同事系統、不需要再同步時執行）。
+function removeDailySync() {
+  const triggers = ScriptApp.getProjectTriggers().filter(function (t) {
+    return t.getHandlerFunction() === 'importFromColleague';
+  });
+  triggers.forEach(function (t) { ScriptApp.deleteTrigger(t); });
+  Logger.log('已移除 ' + triggers.length + ' 個每天自動同步的排程。');
+}
+
+// 一次性校準：如果你在改成「只補新的」這個版本之前，已經手動用舊版 importFromColleague() 整批匯入過同事的
+// 消費紀錄，之後直接跑新版會被當成「還沒同步過」而把同事全部歷史再複製一次。執行這個函式，把同步進度
+// 直接設定成「同事現在的總筆數」，之後 importFromColleague()/每天排程就會正確只補新的，不會重複，
+// 也完全不會動到金流紀錄表現有的任何資料(不管是同事匯入的還是你們自己在新系統測試打的)。
+// 代價：如果同事那邊在「你上次手動匯入」跟「執行這個函式」之間剛好有新增訂單，那幾筆會被跳過、
+// 不會補進來(頂多幾筆，之後可以自己對照兩邊行事曆手動補)。在 Apps Script 編輯器手動執行一次即可。
+function bootstrapColleagueSyncCount() {
+  const resp = UrlFetchApp.fetch(COLLEAGUE_GAS_URL + '?action=getFlow', { muteHttpExceptions: true });
+  if (resp.getResponseCode() !== 200) {
+    Logger.log('讀取同事消費紀錄失敗：HTTP ' + resp.getResponseCode() + '：' + resp.getContentText().slice(0, 300));
+    return;
+  }
+  var data;
+  try { data = JSON.parse(resp.getContentText()); }
+  catch (e) { Logger.log('同事那邊回傳的內容不是合法 JSON：' + resp.getContentText().slice(0, 300)); return; }
+  const count = (data.values || []).length;
+  PropertiesService.getScriptProperties().setProperty('COLLEAGUE_FLOW_SYNCED_COUNT', String(count));
+  Logger.log('已校準：同步進度設定成 ' + count + ' 筆（同事現在的總筆數）。' +
+    '之後執行 importFromColleague() 或每天排程都只會補上這之後同事新增的紀錄，不會重複匯入。');
 }
 
 function cleanName_(s) {

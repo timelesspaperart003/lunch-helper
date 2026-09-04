@@ -1049,6 +1049,13 @@
     function orderBaseTitle(title) {
       return title.replace(/-服務費(?:收入)?$/, '');
     }
+    /* 顯示用：把標題開頭的日期(跟同日序號，如有)拿掉，只留品項名稱。
+       「2026.08.28午餐」「25/12/3-1飲料」顯示成「午餐」「飲料」——反正已經歸到那一天了，
+       日期在標題上重複顯示只會讓色塊/標題太長看不出重點。分組用的 title/key 不受影響，只有顯示字串變乾淨。 */
+    function displayTitle_(title) {
+      const stripped = String(title || '').replace(/^\d{2,4}[./]\d{1,2}[./]\d{1,2}(-\d+)?\s*/, '');
+      return stripped || title;
+    }
     /* 是否為「打帳者服務費收入」列（不列入訂單明細）。
        舊格式：類型=服務費收入；真實格式：類型=儲值且標題含「服務費收入」。 */
     function isSvcIncomeRow(type, fullTitle) {
@@ -1197,7 +1204,7 @@
             num.onclick = () => openDayDetail(key);
             orders.forEach(o => {
               const ev = mk('button', 'cal-event ' + (o.hasDeduction ? 'ev-expense' : (o.hasTopup ? 'ev-topup' : '')));
-              ev.textContent = o.title;
+              ev.textContent = displayTitle_(o.title);
               ev.title = o.title;
               ev.onclick = () => openOrderDetail(o.key);
               list.appendChild(ev);
@@ -1280,7 +1287,7 @@
       if (!o) return;
       activeOrder = o;
       activeDay = null;
-      g('detail-title').textContent = o.title;
+      g('detail-title').textContent = displayTitle_(o.title);
       g('detail-sub').innerHTML = `${o.date}　·　打帳者 ${o.op || '—'}${screenshotLinkHtml_(o)}`;
       g('detail-actions').innerHTML = wholeOrderDeleteBtnHtml_(o);
       renderDetailList();
@@ -1309,7 +1316,7 @@
         if (showHeading) {
           const heading = mk('div', 'detail-name');
           heading.style.margin = '14px 0 8px';
-          heading.innerHTML = `${o.title}　·　打帳者 ${o.op || '—'}${screenshotLinkHtml_(o)}${wholeOrderDeleteBtnHtml_(o)}`;
+          heading.innerHTML = `${displayTitle_(o.title)}　·　打帳者 ${o.op || '—'}${screenshotLinkHtml_(o)}${wholeOrderDeleteBtnHtml_(o)}`;
           wrap.appendChild(heading);
         }
         o.order.forEach(name => wrap.appendChild(buildPersonItem_(o, name)));
@@ -1580,7 +1587,7 @@
       const isTopupOrder = o.hasTopup && !o.hasDeduction;
       const names = o.order.slice();
       if (!names.length) { alert('這筆訂單沒有明細可以刪除'); return; }
-      if (!confirm(`確定要整單刪除「${o.title}」嗎？\n共 ${names.length} 人的紀錄都會退回，這個動作沒辦法復原（但會留下抵銷紀錄可以查）。`)) return;
+      if (!confirm(`確定要整單刪除「${displayTitle_(o.title)}」(${o.date})嗎？\n共 ${names.length} 人的紀錄都會退回，這個動作沒辦法復原（但會留下抵銷紀錄可以查）。`)) return;
 
       try {
         loading('讀取最新餘額...');

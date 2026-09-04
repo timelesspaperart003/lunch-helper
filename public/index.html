@@ -1764,22 +1764,17 @@
     /* ============================================================
        錢包管理（粉紅包/小黃包）
     ============================================================ */
-    async function openWalletManager(dateKey) {
+    /* 錢包資料在 enterCalendar()/refreshCalendar() 就已經先讀好了(只要 me.canWallet)，
+       這裡直接用現成的顯示，不用每次開面板都重打一次 GAS(那張表每次存取要1~2秒起跳，感覺會很慢)。
+       真的要拿最新數字的動作(如撥款前)自己另外 await loadWallets()，見 submitWalletTransfer。 */
+    function openWalletManager(dateKey) {
       if (!me || !me.canWallet) { alert('沒有錢包管理權限'); return; }
       walletDayFilter = dateKey || null;
       g('wallet-transfer-amt').value = '';
       g('wallet-transfer-note').value = '';
       hideE('err-wallet');
       g('wallet-modal').classList.add('open');
-      try {
-        loading('讀取錢包資料...');
-        await loadWallets();
-        unload();
-        renderWalletManager();
-      } catch (e) {
-        unload();
-        showE('err-wallet', '讀取失敗：' + e.message);
-      }
+      renderWalletManager();
     }
 
     function closeWalletManager() {

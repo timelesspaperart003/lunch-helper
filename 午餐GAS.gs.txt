@@ -253,6 +253,16 @@ function bootstrapColleagueSyncCount() {
     '之後執行 importFromColleague() 或每天排程都只會補上這之後同事新增的紀錄，不會重複匯入。');
 }
 
+// 一次性補洞：2026-09-04 執行 bootstrapColleagueSyncCount() 之前，同事系統剛好新增了 3 筆儲值
+// （晴9/2、靖茹9/3、Eason9/4 11:22）卡在「手動整批匯入」跟「校準」中間，被永久跳過沒同步到。
+// 這個函式把同步進度倒回 2260（也就是那 3 筆之前），重新執行一次 importFromColleague() 補上，
+// 執行一次就好，補完之後同步進度會自動回到正確的最新值，之後不用再跑這個。
+function fixMissingSyncGap_20260904() {
+  PropertiesService.getScriptProperties().setProperty('COLLEAGUE_FLOW_SYNCED_COUNT', '2260');
+  Logger.log('已把同步進度倒回 2260，接著自動執行 importFromColleague() 補上中間漏掉的紀錄...');
+  importFromColleague();
+}
+
 function cleanName_(s) {
   return String(s || '').replace(/[.\s]/g, '');
 }

@@ -492,8 +492,7 @@
       transition: filter .15s, transform .15s;
     }
     .cal-event.ev-expense { background: var(--secondary); } /* 支出(扣款)訂單=咖啡色，儲值沿用預設綠色 */
-    .cal-event.ev-wallet-pink   { background: var(--primary); } /* 粉紅包跟儲值同一套綠色 */
-    .cal-event.ev-wallet-yellow { background: #d1a218; } /* 小黃包紀錄，只有可管理錢包的人看得到 */
+    .cal-event.ev-wallet-yellow { background: #d1a218; } /* 小黃包紀錄，只有可管理錢包的人看得到；粉紅包的變動不重複顯示 */
     .cal-event:hover { filter: brightness(1.08); transform: translateX(1px); }
     .cal-dot { display: none; }
 
@@ -1183,8 +1182,11 @@
         cell.appendChild(num);
 
         const orders = ordersByDate[key] || [];
-        const walletEvents = (me && me.canWallet) ? (walletEventsByDate[key] || []) : [];
-        if (orders.length || walletEvents.length) {
+        /* 粉紅包的變動一定跟儲值訂單(綠色)或小黃包增加重複，行事曆上忽略，只看小黃包 */
+        const yellowRows = (me && me.canWallet)
+          ? (walletEventsByDate[key] || []).filter(r => r[1] === WALLET_YELLOW)
+          : [];
+        if (orders.length || yellowRows.length) {
           monthHasOrders = true;
           cell.classList.add('has-orders');
           const list = mk('div', 'cal-events');
@@ -1202,15 +1204,13 @@
             });
           }
 
-          [WALLET_PINK, WALLET_YELLOW].forEach(walletName => {
-            const rows = walletEvents.filter(r => r[1] === walletName);
-            if (!rows.length) return;
-            const ev = mk('button', 'cal-event ' + (walletName === WALLET_PINK ? 'ev-wallet-pink' : 'ev-wallet-yellow'));
-            ev.textContent = `${walletName === WALLET_PINK ? '🌸' : '💛'} ${walletName} x${rows.length}`;
-            ev.title = rows.map(r => `${r[2]} ${r[3]}元`).join('\n');
+          if (yellowRows.length) {
+            const ev = mk('button', 'cal-event ev-wallet-yellow');
+            ev.textContent = `💛 小黃包 x${yellowRows.length}`;
+            ev.title = yellowRows.map(r => `${r[2]} ${r[3]}元`).join('\n');
             ev.onclick = () => openWalletManager();
             list.appendChild(ev);
-          });
+          }
 
           cell.appendChild(list);
         }

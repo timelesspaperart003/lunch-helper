@@ -22,6 +22,7 @@
 const MAIN_TAB = '主名單表';
 const FLOW_TAB = '金流紀錄表';
 const NAME_MAP_TAB = '姓名對照表'; // Uber顯示名稱 → 主名單表姓名，第一次用時會自動建立
+const WALLET_TAB = '錢包紀錄表'; // 粉紅包/小黃包兩個共用現金錢包的進出紀錄
 const GEMINI_MODEL = 'gemini-3.6-flash'; // gemini-2.0-flash 已停用(2026-08 Google API 回應建議改用此型號)
 const SCREENSHOT_DRIVE_FOLDER = '午餐叫飯小幫手截圖'; // 上傳的 Uber Eats 截圖存這個 Drive 資料夾，第一次用時會自動建立
 
@@ -44,10 +45,10 @@ function setupSpreadsheet() {
   const ss = SpreadsheetApp.create('午餐錢小幫手（獨立版）');
   const main = ss.getSheets()[0];
   main.setName(MAIN_TAB);
-  main.getRange(1, 1, 1, 13).setValues([[
+  main.getRange(1, 1, 1, 14).setValues([[
     '姓名', 'LINE_ID', '餘額', '上次通知日', '註冊時間', '角色',
     '共用錢包歸戶', '低額逾期狀態', '低額開始日', '最近提醒日', '登入密碼',
-    '可儲值', '可輸入訂單'
+    '可儲值', '可輸入訂單', '可管理錢包'
   ]]);
 
   const flow = ss.insertSheet(FLOW_TAB);
@@ -56,10 +57,15 @@ function setupSpreadsheet() {
     '原餘額', '新餘額', '操作者', '備註', '時間戳記', '共用錢包歸戶', '打單日期', '截圖連結'
   ]]);
 
+  const wallet = ss.insertSheet(WALLET_TAB);
+  wallet.getRange(1, 1, 1, 8).setValues([[
+    '時間戳記', '錢包', '類型', '金額', '原餘額', '新餘額', '說明', '操作者'
+  ]]);
+
   props.setProperty('SS_ID', ss.getId());
   Logger.log('新試算表已建立：' + ss.getUrl());
   Logger.log('接下來請到「主名單表」手動建立初始名單（姓名 + 登入密碼欄填密碼，填了密碼才能登入；' +
-    '可儲值/可輸入訂單這兩欄填 V 代表有權限，空白代表沒有）');
+    '可儲值/可輸入訂單/可管理錢包這三欄填 V 代表有權限，空白代表沒有）');
 }
 
 // 一次性：幫已經建立過的舊試算表補上「可儲值」「可輸入訂單」這兩個新欄位(L、M)。
@@ -89,6 +95,32 @@ function addScreenshotColumn() {
   }
   sheet.getRange(1, 14).setValue('截圖連結');
   Logger.log('已在金流紀錄表補上「截圖連結」(N欄)。之後截圖匯入的訂單會自動把 Drive 連結填進去。');
+}
+
+// 一次性：幫已經建立過的舊試算表補上「可管理錢包」欄位(主名單表 N 欄)+ 建立「錢包紀錄表」分頁。
+// 在 Apps Script 編輯器手動執行一次即可，重複執行也安全。
+function addWalletFeature() {
+  const ss = getSS_();
+
+  const mainSheet = ss.getSheetByName(MAIN_TAB);
+  const headers = mainSheet.getRange(1, 1, 1, Math.max(mainSheet.getLastColumn(), 13)).getValues()[0];
+  if (headers[13] !== '可管理錢包') {
+    mainSheet.getRange(1, 14).setValue('可管理錢包');
+    Logger.log('已在主名單表補上「可管理錢包」(N欄)，請幫需要的人（例如 Rachel、晴）填 V。');
+  } else {
+    Logger.log('主名單表已經有「可管理錢包」欄位了。');
+  }
+
+  let walletSheet = ss.getSheetByName(WALLET_TAB);
+  if (!walletSheet) {
+    walletSheet = ss.insertSheet(WALLET_TAB);
+    walletSheet.getRange(1, 1, 1, 8).setValues([[
+      '時間戳記', '錢包', '類型', '金額', '原餘額', '新餘額', '說明', '操作者'
+    ]]);
+    Logger.log('已建立「錢包紀錄表」分頁。');
+  } else {
+    Logger.log('「錢包紀錄表」分頁已經存在了。');
+  }
 }
 
 // 同事那套系統的 GAS 網址，只用來「讀」他的名單，不會寫回去
@@ -134,14 +166,14 @@ function importFromColleague() {
       updated++;
     } else {
       toAdd.push([
-        name, r[1] || '', r[2] || 0, '', '', r[5] || '', r[6] || '', '', '', '', '', '', ''
-        // 姓名/LINE_ID/餘額/(上次通知日空)/(註冊時間空)/角色/共用錢包歸戶/(低額逾期狀態空)/(低額開始日空)/(最近提醒日空)/登入密碼(不匯入)/可儲值(不匯入)/可輸入訂單(不匯入)
+        name, r[1] || '', r[2] || 0, '', '', r[5] || '', r[6] || '', '', '', '', '', '', '', ''
+        // 姓名/LINE_ID/餘額/(上次通知日空)/(註冊時間空)/角色/共用錢包歸戶/(低額逾期狀態空)/(低額開始日空)/(最近提醒日空)/登入密碼(不匯入)/可儲值(不匯入)/可輸入訂單(不匯入)/可管理錢包(不匯入)
       ]);
       added++;
     }
   });
   if (toAdd.length) {
-    mainSheet.getRange(mainSheet.getLastRow() + 1, 1, toAdd.length, 13).setValues(toAdd);
+    mainSheet.getRange(mainSheet.getLastRow() + 1, 1, toAdd.length, 14).setValues(toAdd);
   }
   Logger.log('主名單表：新增 ' + added + ' 人、同步餘額 ' + updated + ' 人。密碼欄不會從同事那邊帶過來，要登入的人請自行設定密碼。');
 
@@ -213,7 +245,7 @@ function doGet(e) {
       const sheet = ss.getSheetByName(MAIN_TAB);
       const lastRow = sheet.getLastRow();
       if (lastRow < 2) return respond_({ values: [] });
-      const data = sheet.getRange(2, 1, lastRow - 1, 13).getValues();
+      const data = sheet.getRange(2, 1, lastRow - 1, 14).getValues();
       return respond_({ values: data.filter(function (row) { return row[0] !== ''; }) });
     }
 
@@ -225,6 +257,18 @@ function doGet(e) {
       if (lastRow < 2) return respond_({ values: [] });
       const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getDisplayValues();
       return respond_({ values: data.filter(function (row) { return row[0] !== '' || row[1] !== ''; }) });
+    }
+
+    // --- 讀取粉紅包/小黃包兩個錢包的目前餘額+最近紀錄 ---
+    if (action === 'getWallets') {
+      const sheet = ss.getSheetByName(WALLET_TAB);
+      if (!sheet) return respond_({ balances: {}, ledger: [] });
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 2) return respond_({ balances: {}, ledger: [] });
+      const data = sheet.getRange(2, 1, lastRow - 1, 8).getDisplayValues();
+      const balances = {};
+      data.forEach(function (row) { if (row[1]) balances[row[1]] = row[5]; }); // 掃到最後一筆自然是最新餘額
+      return respond_({ balances: balances, ledger: data.filter(function (row) { return row[1] !== ''; }) });
     }
 
     // --- 送出扣款/儲值/修改 ---
@@ -251,6 +295,15 @@ function doGet(e) {
           const mapSheet = getOrCreateNameMapSheet_(ss);
           const rows = adds.map(function (x) { return [x.ubName, x.realName]; });
           mapSheet.getRange(mapSheet.getLastRow() + 1, 1, rows.length, 2).setValues(rows);
+        }
+
+        // 粉紅包/小黃包錢包紀錄（儲值自動存入粉紅包、訂單外送費自動從小黃包扣、或手動撥款）
+        const walletRows = payload.walletRows;
+        if (walletRows && walletRows.length) {
+          const walletSheet = ss.getSheetByName(WALLET_TAB);
+          if (walletSheet) {
+            walletSheet.getRange(walletSheet.getLastRow() + 1, 1, walletRows.length, 8).setValues(walletRows);
+          }
         }
       } finally {
         lock.releaseLock();

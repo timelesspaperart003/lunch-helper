@@ -728,6 +728,43 @@
   <!-- 右下角新增按鈕（只在行事曆顯示） -->
   <button class="fab" id="fab-add" onclick="openPayment()" title="新增打帳單" style="display:none; background:var(--secondary);">＋</button>
   <button class="fab" id="fab-topup" onclick="openTopup()" title="新增儲值" style="display:none; right:22px; bottom:96px;">💰</button>
+  <button class="fab" id="fab-wallet" onclick="openWalletManager()" title="錢包管理" style="display:none; right:22px; bottom:168px; background:#c98a3a;">🏦</button>
+
+  <!-- ==================== 錢包管理 MODAL ==================== -->
+  <div class="modal-overlay" id="wallet-modal" onclick="if(event.target===this)closeWalletManager()">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div><div class="modal-title">🏦 錢包管理</div></div>
+        <button class="modal-close" onclick="closeWalletManager()">✕</button>
+      </div>
+      <div class="modal-sub">粉紅包＝大家儲值進來的總池；小黃包＝實際付外送費用的零用金</div>
+
+      <div class="summary-card" style="margin-bottom:16px;">
+        <div class="sum-row">
+          <span class="sum-label">🌸 粉紅包餘額</span>
+          <span class="sum-val hi" id="wallet-pink-bal">0 元</span>
+        </div>
+        <div class="sum-row">
+          <span class="sum-label">💛 小黃包餘額</span>
+          <span class="sum-val hi" id="wallet-yellow-bal">0 元</span>
+        </div>
+      </div>
+
+      <div id="err-wallet" class="err-msg" style="display:none"></div>
+      <div class="field">
+        <label>從粉紅包撥款到小黃包（元）</label>
+        <input type="number" id="wallet-transfer-amt" min="0" placeholder="金額">
+      </div>
+      <div class="field">
+        <label>備註</label>
+        <input type="text" id="wallet-transfer-note" placeholder="例：小黃包快沒錢了">
+      </div>
+      <button class="submit-btn" onclick="submitWalletTransfer()">撥款到小黃包</button>
+
+      <div class="modal-sub" style="margin-top:18px;">最近紀錄</div>
+      <div id="wallet-ledger-list"></div>
+    </div>
+  </div>
 
   <!-- ==================== 儲值 MODAL ==================== -->
   <div class="modal-overlay" id="topup-modal" onclick="if(event.target===this)closeTopup()">
@@ -900,11 +937,14 @@
     };
 
     /* 主名單欄位索引 (A=0) */
-    const C = { NAME:0, BALANCE:2, ROLE:5, WALLET:6, OVERDUE:7, PASSWORD:10, CAN_TOPUP:11, CAN_ORDER:12 };
+    const C = { NAME:0, BALANCE:2, ROLE:5, WALLET:6, OVERDUE:7, PASSWORD:10, CAN_TOPUP:11, CAN_ORDER:12, CAN_WALLET:13 };
 
     /* 金流紀錄表欄位索引 (A=0) */
     const F = { TITLE:0, NAME:1, TYPE:2, AMT:3, DELIVERY:4, CHANGE:5,
                 BAL_BEFORE:6, BAL_AFTER:7, OP:8, NOTE:9, TS:10, WALLET:11, DATE:12, SCREENSHOT:13 };
+
+    /* 粉紅包/小黃包兩個共用現金錢包的名稱(跟 C.WALLET「共用錢包歸戶」是不同東西，那個是舊欄位) */
+    const WALLET_PINK = '粉紅包', WALLET_YELLOW = '小黃包';
 
     /* 本機測試模式：網址加 ?mock=1 即用假資料、跳過 Google 登入 */
     const MOCK = new URLSearchParams(location.search).has('mock');
@@ -928,6 +968,8 @@
     let showTitles   = false; // 是否顯示明細標題文字（預設隱藏，手機塞不下）
     let activeOrder  = null;  // 目前展開中的訂單（單筆檢視用）
     let activeDay    = null;  // 目前展開中的日期字串（整天檢視用，跟 activeOrder 二選一）
+    let walletBalances = {}; // { 粉紅包: 餘額, 小黃包: 餘額 }
+    let walletLedger   = []; // 錢包紀錄表原始列，最新的在最後面
 
     /* ============================================================
        APPS SCRIPT API helper
@@ -960,6 +1002,12 @@
     async function loadFlow() {
       const d = await callScript('getFlow');
       flowData = d.values || [];
+    }
+
+    async function loadWallets() {
+      const d = await callScript('getWallets');
+      walletBalances = d.balances || {};
+      walletLedger = d.ledger || [];
     }
 
     /* ============================================================
@@ -1010,7 +1058,7 @@
         const key = date + '||' + base;
         let o = map[key];
         if (!o) {
-          o = map[key] = { key, date, title: base, op: row[F.OP] || '', persons: {}, order: [], hasDeduction: false, hasTopup: false, screenshotLink: '' };
+          o = map[key] = { key, date, title: base, op: row[F.OP] || '', persons: {}, order: [], hasDeduction: false, hasTopup: false, screenshotLink: '', deliveryFee: 0 };
           (ordersByDate[date] = ordersByDate[date] || []).push(o);
         }
         if (!o.screenshotLink && row[F.SCREENSHOT]) o.screenshotLink = row[F.SCREENSHOT];
@@ -1025,7 +1073,7 @@
         let p = o.persons[name];
         if (!p) { p = o.persons[name] = { name, deduction: 0, svcFee: 0, corrections: 0, amt: 0, topup: 0 }; o.order.push(name); }
         // 同時支援真實格式（服務費扣款/儲值）與舊格式（服務費）
-        if (type === '扣款')                                { p.deduction += -change; p.amt += parseFloat(row[F.AMT]) || 0; o.hasDeduction = true; }
+        if (type === '扣款')                                { p.deduction += -change; p.amt += parseFloat(row[F.AMT]) || 0; o.hasDeduction = true; o.deliveryFee = parseFloat(row[F.DELIVERY]) || o.deliveryFee; }
         else if (type === '服務費' || type === '服務費扣款') { p.svcFee += -change; }
         else if (type === '儲值')                            { p.topup += change; o.hasTopup = true; } // 儲值金額看「變動金額」F 欄
         else if (type === '修改')                            { p.corrections += change; }
@@ -1453,8 +1501,14 @@
         const flowRows = [[o.title, name, '儲值', 0, 0, -amt, b0, b1, me.name, '刪除儲值紀錄', ts, entry.data[C.WALLET] || '', o.date]];
         const balanceUpdates = [{ row: entry.rowNum, value: b1 }];
 
+        // 這筆儲值當初自動存進粉紅包的錢，刪除時也要扣回去
+        await loadWallets();
+        const pinkBefore = parseFloat(walletBalances[WALLET_PINK]) || 0;
+        const pinkAfter  = round2(pinkBefore - amt);
+        const walletRows = [[ts, WALLET_PINK, '刪除儲值', -amt, pinkBefore, pinkAfter, `刪除${name}的儲值`, me.name]];
+
         loading('寫入刪除...');
-        await callScript('submit', { flowRows, balanceUpdates });
+        await callScript('submit', { flowRows, balanceUpdates, walletRows });
 
         loading('重新整理...');
         await loadFlow();
@@ -1545,8 +1599,17 @@
           .filter(n => rowMap[n])
           .map(n => ({ row: rowMap[n].rowNum, value: bal[n] }));
 
+        // 整單刪除的話，這筆訂單當初自動從小黃包扣的外送費也要退回去（整單才退，刪單一個人不退）
+        let walletRows = [];
+        if (!isTopupOrder && o.deliveryFee > 0) {
+          await loadWallets();
+          const yellowBefore = parseFloat(walletBalances[WALLET_YELLOW]) || 0;
+          const yellowAfter  = round2(yellowBefore + o.deliveryFee);
+          walletRows = [[ts, WALLET_YELLOW, '刪除訂單退回', o.deliveryFee, yellowBefore, yellowAfter, `整單刪除「${o.title}」退回外送費`, me.name]];
+        }
+
         loading(`寫入刪除（${names.length} 人）...`);
-        await callScript('submit', { flowRows, balanceUpdates });
+        await callScript('submit', { flowRows, balanceUpdates, walletRows });
 
         loading('重新整理...');
         await loadFlow();
@@ -1620,8 +1683,16 @@
         ]];
         const balanceUpdates = [{ row: entry.rowNum, value: balAfter }];
 
+        // 儲值金額自動存入粉紅包
+        await loadWallets();
+        const pinkBefore = parseFloat(walletBalances[WALLET_PINK]) || 0;
+        const pinkAfter  = round2(pinkBefore + amt);
+        const walletRows = [[
+          ts, WALLET_PINK, '儲值入帳', amt, pinkBefore, pinkAfter, `${name} 儲值`, me.name
+        ]];
+
         loading('寫入儲值...');
-        await callScript('submit', { flowRows, balanceUpdates });
+        await callScript('submit', { flowRows, balanceUpdates, walletRows });
 
         loading('重新整理...');
         closeTopup();
@@ -1630,6 +1701,95 @@
       } catch (e) {
         unload();
         showE('err-topup', '送出失敗：' + e.message);
+      }
+    }
+
+    /* ============================================================
+       錢包管理（粉紅包/小黃包）
+    ============================================================ */
+    async function openWalletManager() {
+      if (!me || !me.canWallet) { alert('沒有錢包管理權限'); return; }
+      g('wallet-transfer-amt').value = '';
+      g('wallet-transfer-note').value = '';
+      hideE('err-wallet');
+      g('wallet-modal').classList.add('open');
+      try {
+        loading('讀取錢包資料...');
+        await loadWallets();
+        unload();
+        renderWalletManager();
+      } catch (e) {
+        unload();
+        showE('err-wallet', '讀取失敗：' + e.message);
+      }
+    }
+
+    function closeWalletManager() {
+      g('wallet-modal').classList.remove('open');
+    }
+
+    function renderWalletManager() {
+      g('wallet-pink-bal').textContent   = round2(walletBalances[WALLET_PINK] || 0) + ' 元';
+      g('wallet-yellow-bal').textContent = round2(walletBalances[WALLET_YELLOW] || 0) + ' 元';
+
+      const list = g('wallet-ledger-list');
+      list.innerHTML = '';
+      const recent = walletLedger.slice(-15).reverse(); // 最新的在最上面，只看最近15筆
+      if (!recent.length) {
+        list.innerHTML = '<div class="import-hint">還沒有任何錢包紀錄</div>';
+        return;
+      }
+      recent.forEach(row => {
+        const [ts, wallet, type, amt, before, after, note, op] = row;
+        const item = mk('div', 'detail-item');
+        const sign = parseFloat(amt) >= 0 ? '+' : '';
+        item.innerHTML = `
+          <div class="detail-top">
+            <div><div class="detail-name">${wallet}｜${type}</div></div>
+          </div>
+          <div class="detail-figs">
+            <span class="fig-eff">${sign}${amt} 元</span>
+            <span>餘額 ${after} 元</span>
+            <span>${note || ''}</span>
+            <span>${op || ''}・${ts || ''}</span>
+          </div>`;
+        list.appendChild(item);
+      });
+    }
+
+    async function submitWalletTransfer() {
+      if (!me || !me.canWallet) { showE('err-wallet', '沒有錢包管理權限'); return; }
+      const amt  = parseFloat(g('wallet-transfer-amt').value);
+      const note = g('wallet-transfer-note').value.trim();
+      hideE('err-wallet');
+      if (!amt || amt <= 0) { showE('err-wallet', '請輸入有效金額'); return; }
+
+      try {
+        loading('讀取錢包餘額...');
+        await loadWallets();
+        const pinkBefore   = parseFloat(walletBalances[WALLET_PINK]) || 0;
+        const yellowBefore = parseFloat(walletBalances[WALLET_YELLOW]) || 0;
+        const pinkAfter    = round2(pinkBefore - amt);
+        const yellowAfter  = round2(yellowBefore + amt);
+        const ts = new Date().toLocaleString('zh-TW');
+
+        const walletRows = [
+          [ts, WALLET_PINK,   '轉出到小黃包', -amt, pinkBefore,   pinkAfter,   note, me.name],
+          [ts, WALLET_YELLOW, '粉紅包轉入',    amt, yellowBefore, yellowAfter, note, me.name],
+        ];
+
+        loading('寫入撥款...');
+        await callScript('submit', { flowRows: [], balanceUpdates: [], walletRows });
+
+        loading('重新整理...');
+        await loadWallets();
+        unload();
+        renderWalletManager();
+        g('wallet-transfer-amt').value = '';
+        g('wallet-transfer-note').value = '';
+      } catch (e) {
+        unload();
+        showE('err-wallet', '撥款失敗：' + e.message);
       }
     }
 
@@ -1724,6 +1884,7 @@
         data: entry.data,
         canTopup: truthy_(entry.data[C.CAN_TOPUP]),
         canOrder: truthy_(entry.data[C.CAN_ORDER]),
+        canWallet: truthy_(entry.data[C.CAN_WALLET]),
       };
     }
 
@@ -2081,7 +2242,19 @@
         const nameMapAdds = rows
           .filter(r => r.ubName && r.name)
           .map(r => ({ ubName: r.ubName, realName: r.name }));
-        await callScript('submit', { flowRows, balanceUpdates, nameMapAdds });
+
+        /* 這筆訂單有外送費的話，整單自動從小黃包扣一次（不是每個人扣一次） */
+        let walletRows = [];
+        if (delivery > 0) {
+          await loadWallets();
+          const yellowBefore = parseFloat(walletBalances[WALLET_YELLOW]) || 0;
+          const yellowAfter  = round2(yellowBefore - delivery);
+          walletRows = [[
+            ts, WALLET_YELLOW, '訂單支出', -delivery, yellowBefore, yellowAfter, `${title} 外送費`, op
+          ]];
+        }
+
+        await callScript('submit', { flowRows, balanceUpdates, nameMapAdds, walletRows });
 
         unload();
         showResults();
@@ -2129,6 +2302,7 @@
       const onCal = String(n) === 'cal';
       g('fab-add').style.display = (onCal && me && me.canOrder) ? 'flex' : 'none';
       g('fab-topup').style.display = (onCal && me && me.canTopup) ? 'flex' : 'none';
+      g('fab-wallet').style.display = (onCal && me && me.canWallet) ? 'flex' : 'none';
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 

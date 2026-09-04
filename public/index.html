@@ -1219,8 +1219,9 @@
           }
 
           if (yellowRows.length) {
+            // 行事曆只需要標示「這天有小黃包異動」，詳細金額/幾筆去錢包管理面板看就好，不用把數字塞進色塊
             const ev = mk('button', 'cal-event ev-wallet-yellow');
-            ev.textContent = `💛 小黃包 x${yellowRows.length}`;
+            ev.textContent = '💛 小黃包';
             ev.title = yellowRows.map(r => `${r[2]} ${r[3]}元`).join('\n');
             ev.onclick = () => openWalletManager();
             list.appendChild(ev);

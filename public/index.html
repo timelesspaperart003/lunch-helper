@@ -1056,6 +1056,13 @@
       const stripped = String(title || '').replace(/^\d{2,4}[./]\d{1,2}[./]\d{1,2}(-\d+)?\s*/, '');
       return stripped || title;
     }
+    /* 顯示用（給訂單物件o）：純儲值訂單標題本來就只是「9/4 儲值」，去掉日期後只剩「儲值」看不出是誰存的，
+       改顯示成「姓名 儲值」；一般訂單(扣款/混合)照舊只去日期。 */
+    function displayOrderTitle_(o) {
+      const isTopupOrder = o.hasTopup && !o.hasDeduction;
+      if (isTopupOrder && o.order.length) return `${o.order[0]} 儲值`;
+      return displayTitle_(o.title);
+    }
     /* 是否為「打帳者服務費收入」列（不列入訂單明細）。
        舊格式：類型=服務費收入；真實格式：類型=儲值且標題含「服務費收入」。 */
     function isSvcIncomeRow(type, fullTitle) {
@@ -1204,7 +1211,7 @@
             num.onclick = () => openDayDetail(key);
             orders.forEach(o => {
               const ev = mk('button', 'cal-event ' + (o.hasDeduction ? 'ev-expense' : (o.hasTopup ? 'ev-topup' : '')));
-              ev.textContent = displayTitle_(o.title);
+              ev.textContent = displayOrderTitle_(o);
               ev.title = o.title;
               ev.onclick = () => openOrderDetail(o.key);
               list.appendChild(ev);
@@ -1287,7 +1294,7 @@
       if (!o) return;
       activeOrder = o;
       activeDay = null;
-      g('detail-title').textContent = displayTitle_(o.title);
+      g('detail-title').textContent = displayOrderTitle_(o);
       g('detail-sub').innerHTML = `${o.date}　·　打帳者 ${o.op || '—'}${screenshotLinkHtml_(o)}`;
       g('detail-actions').innerHTML = wholeOrderDeleteBtnHtml_(o);
       renderDetailList();
@@ -1316,7 +1323,7 @@
         if (showHeading) {
           const heading = mk('div', 'detail-name');
           heading.style.margin = '14px 0 8px';
-          heading.innerHTML = `${displayTitle_(o.title)}　·　打帳者 ${o.op || '—'}${screenshotLinkHtml_(o)}${wholeOrderDeleteBtnHtml_(o)}`;
+          heading.innerHTML = `${displayOrderTitle_(o)}　·　打帳者 ${o.op || '—'}${screenshotLinkHtml_(o)}${wholeOrderDeleteBtnHtml_(o)}`;
           wrap.appendChild(heading);
         }
         o.order.forEach(name => wrap.appendChild(buildPersonItem_(o, name)));
@@ -1587,7 +1594,7 @@
       const isTopupOrder = o.hasTopup && !o.hasDeduction;
       const names = o.order.slice();
       if (!names.length) { alert('這筆訂單沒有明細可以刪除'); return; }
-      if (!confirm(`確定要整單刪除「${displayTitle_(o.title)}」(${o.date})嗎？\n共 ${names.length} 人的紀錄都會退回，這個動作沒辦法復原（但會留下抵銷紀錄可以查）。`)) return;
+      if (!confirm(`確定要整單刪除「${displayOrderTitle_(o)}」(${o.date})嗎？\n共 ${names.length} 人的紀錄都會退回，這個動作沒辦法復原（但會留下抵銷紀錄可以查）。`)) return;
 
       try {
         loading('讀取最新餘額...');

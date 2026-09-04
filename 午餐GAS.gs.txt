@@ -235,6 +235,36 @@ function getOrCreateNameMapSheet_(ss) {
   return sheet;
 }
 
+// 一次性：清掉「姓名對照表」裡的重複列（舊版邏輯每次送出都會無條件多寫一筆，累積了很多重複）。
+// 同一個 Uber 名字只留「最後一筆」（最新的對應），其餘刪掉。在 Apps Script 編輯器手動執行一次即可。
+function dedupeNameMap() {
+  const ss = getSS_();
+  const sheet = ss.getSheetByName(NAME_MAP_TAB);
+  if (!sheet) { Logger.log('還沒有姓名對照表分頁，不用清理。'); return; }
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) { Logger.log('姓名對照表沒有資料，不用清理。'); return; }
+
+  const data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  const lastIndexByName = {}; // 清洗過的Uber名字 → 最後一次出現的資料列 index(在 data 裡)
+  data.forEach(function (row, i) {
+    const key = cleanName_(row[0]);
+    if (key) lastIndexByName[key] = i;
+  });
+
+  const keepIndexes = {};
+  Object.keys(lastIndexByName).forEach(function (k) { keepIndexes[lastIndexByName[k]] = true; });
+  const deduped = data.filter(function (row, i) { return row[0] && keepIndexes[i]; });
+
+  const removed = data.filter(function (r) { return r[0]; }).length - deduped.length;
+  if (!removed) { Logger.log('沒有重複的紀錄，不用清理。'); return; }
+
+  sheet.getRange(2, 1, lastRow - 1, 2).clearContent();
+  if (deduped.length) {
+    sheet.getRange(2, 1, deduped.length, 2).setValues(deduped);
+  }
+  Logger.log('清理完成：移除了 ' + removed + ' 筆重複的姓名對照，保留 ' + deduped.length + ' 筆唯一對應。');
+}
+
 function doGet(e) {
   try {
     const action = e.parameter.action;
@@ -293,8 +323,13 @@ function doGet(e) {
         const adds = payload.nameMapAdds;
         if (adds && adds.length) {
           const mapSheet = getOrCreateNameMapSheet_(ss);
-          const rows = adds.map(function (x) { return [x.ubName, x.realName]; });
-          mapSheet.getRange(mapSheet.getLastRow() + 1, 1, rows.length, 2).setValues(rows);
+          const currentMap = getNameMap_(ss); // 清洗過的Uber名字 → 目前記錄的姓名
+          const rows = adds
+            .filter(function (x) { return currentMap[cleanName_(x.ubName)] !== x.realName; }) // 已經記過同樣對應的就不重寫
+            .map(function (x) { return [x.ubName, x.realName]; });
+          if (rows.length) {
+            mapSheet.getRange(mapSheet.getLastRow() + 1, 1, rows.length, 2).setValues(rows);
+          }
         }
 
         // 粉紅包/小黃包錢包紀錄（儲值自動存入粉紅包、訂單外送費自動從小黃包扣、或手動撥款）

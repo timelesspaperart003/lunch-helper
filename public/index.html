@@ -985,7 +985,7 @@
     let ordersByDate = {};    // 'YYYY-MM-DD' → [order]
     let calYear      = 0;
     let calMonth     = 0;     // 0-11
-    let showTitles   = false; // 是否顯示明細標題文字（預設隱藏，手機塞不下）
+    let showTitles   = true; // 是否顯示明細標題文字（預設顯示）
     let activeOrder  = null;  // 目前展開中的訂單（單筆檢視用）
     let activeDay    = null;  // 目前展開中的日期字串（整天檢視用，跟 activeOrder 二選一）
     let walletBalances = {}; // { 粉紅包: 餘額, 小黃包: 餘額 }

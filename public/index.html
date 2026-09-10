@@ -762,6 +762,24 @@
       </div>
       <button class="submit-btn" onclick="submitWalletTransfer()">撥款到小黃包</button>
 
+      <div class="modal-sub" style="margin-top:18px;">校正餘額（實際現金跟系統記的對不上時用）</div>
+      <div class="field">
+        <label>校正哪個錢包</label>
+        <select id="wallet-adjust-target">
+          <option value="粉紅包">🌸 粉紅包</option>
+          <option value="小黃包">💛 小黃包</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>實際應該有的餘額（元）</label>
+        <input type="number" id="wallet-adjust-amt" placeholder="例：5000">
+      </div>
+      <div class="field">
+        <label>備註</label>
+        <input type="text" id="wallet-adjust-note" placeholder="例：期初餘額校正">
+      </div>
+      <button class="add-btn" style="width:100%" onclick="submitWalletAdjustment()">校正餘額</button>
+
       <div class="modal-sub" style="margin-top:18px;">最近紀錄</div>
       <div id="wallet-filter" style="display:flex; gap:8px; margin-bottom:10px;"></div>
       <div id="wallet-ledger-list"></div>
@@ -1899,6 +1917,41 @@
       } catch (e) {
         unload();
         showE('err-wallet', '撥款失敗：' + e.message);
+      }
+    }
+
+    /* 校正餘額：直接輸入「現在實際應該有多少錢」，系統自動算差額補一筆校正紀錄。
+       用途：期初餘額(系統開始記錄前錢包本來就有的錢)、或跟實際點鈔對不上時手動調整。 */
+    async function submitWalletAdjustment() {
+      if (!me || !me.canWallet) { showE('err-wallet', '沒有錢包管理權限'); return; }
+      const target = g('wallet-adjust-target').value;
+      const newBal = parseFloat(g('wallet-adjust-amt').value);
+      const note   = g('wallet-adjust-note').value.trim() || '餘額校正';
+      hideE('err-wallet');
+      if (isNaN(newBal)) { showE('err-wallet', '請輸入有效金額'); return; }
+
+      try {
+        loading('讀取錢包餘額...');
+        await loadWallets();
+        const before = parseFloat(walletBalances[target]) || 0;
+        const delta = round2(newBal - before);
+        if (delta === 0) { unload(); showE('err-wallet', '跟目前餘額一樣，不用校正'); return; }
+
+        const ts = new Date().toLocaleString('zh-TW');
+        const walletRows = [[ts, target, '餘額校正', delta, before, round2(newBal), note, me.name]];
+
+        loading('寫入校正...');
+        await callScript('submit', { flowRows: [], balanceUpdates: [], walletRows });
+
+        loading('重新整理...');
+        await loadWallets();
+        unload();
+        renderWalletManager();
+        g('wallet-adjust-amt').value = '';
+        g('wallet-adjust-note').value = '';
+      } catch (e) {
+        unload();
+        showE('err-wallet', '校正失敗：' + e.message);
       }
     }
 
